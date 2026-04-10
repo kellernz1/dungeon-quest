@@ -1,5 +1,5 @@
 import {
-  GameState, Enemy,
+  GameState, Player, Enemy,
   Room, Vector2, HeroClass, HERO_CONFIGS, EnemyType,
 } from './types';
 
