@@ -15,6 +15,23 @@ export interface Entity {
   alive: boolean;
 }
 
+export type HeroClass = 'warrior' | 'archer' | 'mage' | 'rogue';
+export type EnemyType = 'goblin' | 'skeleton' | 'orc' | 'necromancer' | 'boss';
+export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type TrapType = 'spikes' | 'arrow_launcher' | 'fire_vent';
+
+export interface Weapon {
+  id: string;
+  name: string;
+  damage: number;
+  attackSpeed: number;
+  range: number;
+  rarity: WeaponRarity;
+  isRanged: boolean;
+  effect?: 'fire' | 'ice' | 'poison' | 'lightning';
+  effectChance?: number;
+}
+
 export interface Player extends Entity {
   speed: number;
   attackCooldown: number;
@@ -34,24 +51,38 @@ export interface Player extends Entity {
   heroClass: HeroClass;
   abilityTimer: number;
   abilityCooldown: number;
+  weapon: Weapon;
+  inventory: Weapon[];
+  statusEffects: StatusEffect[];
+  killCount: number;
 }
 
-export type HeroClass = 'warrior' | 'archer' | 'mage' | 'rogue';
+export interface StatusEffect {
+  type: 'burn' | 'freeze' | 'poison' | 'stun';
+  duration: number;
+  tickTimer: number;
+  damage: number;
+}
 
 export interface Enemy extends Entity {
   speed: number;
+  baseSpeed: number;
   damage: number;
   attackCooldown: number;
   attackTimer: number;
-  state: 'idle' | 'chase' | 'attack' | 'hurt';
+  state: 'idle' | 'chase' | 'attack' | 'hurt' | 'retreat';
   type: EnemyType;
   knockbackTimer: number;
   flashTimer: number;
   xpValue: number;
   goldValue: number;
+  isRanged: boolean;
+  shootCooldown: number;
+  shootTimer: number;
+  phaseHP?: number; // for boss phase transitions
+  phase?: number;
+  statusEffects: StatusEffect[];
 }
-
-export type EnemyType = 'goblin' | 'skeleton' | 'orc' | 'boss';
 
 export interface Projectile {
   pos: Vector2;
@@ -60,6 +91,8 @@ export interface Projectile {
   radius: number;
   lifetime: number;
   fromPlayer: boolean;
+  color?: string;
+  effect?: 'fire' | 'ice' | 'poison' | 'lightning';
 }
 
 export interface Particle {
@@ -73,11 +106,12 @@ export interface Particle {
 
 export interface LootDrop {
   pos: Vector2;
-  type: 'gold' | 'health' | 'weapon';
+  type: 'gold' | 'health' | 'weapon' | 'mana';
   value: number;
-  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  rarity: WeaponRarity;
   lifetime: number;
   bobOffset: number;
+  weapon?: Weapon;
 }
 
 export interface DamageNumber {
@@ -86,17 +120,57 @@ export interface DamageNumber {
   lifetime: number;
   color: string;
   isCrit: boolean;
+  text?: string;
 }
 
-export interface Room {
+export interface Trap {
+  pos: Vector2;
+  width: number;
+  height: number;
+  type: TrapType;
+  damage: number;
+  cooldown: number;
+  timer: number;
+  active: boolean;
+  direction?: Vector2; // for arrow launchers
+}
+
+export interface Door {
   x: number;
   y: number;
   width: number;
   height: number;
+  direction: 'n' | 's' | 'e' | 'w';
+  locked: boolean;
+  targetRoom: number;
+}
+
+export interface DungeonRoom {
+  id: number;
+  gridX: number;
+  gridY: number;
+  width: number;
+  height: number;
   walls: { x: number; y: number; w: number; h: number }[];
   enemies: Enemy[];
+  traps: Trap[];
   cleared: boolean;
-  doors: { x: number; y: number; direction: 'n' | 's' | 'e' | 'w'; locked: boolean }[];
+  doors: Door[];
+  visited: boolean;
+  type: 'combat' | 'treasure' | 'boss' | 'shop' | 'start';
+  theme: 'cave' | 'crypt' | 'fortress' | 'shadow';
+}
+
+export interface Dungeon {
+  rooms: DungeonRoom[];
+  currentRoomId: number;
+  tier: number;
+}
+
+export interface ShopItem {
+  weapon: Weapon;
+  price: number;
+  sold: boolean;
 }
 
 export interface GameState {
@@ -106,7 +180,8 @@ export interface GameState {
   particles: Particle[];
   loot: LootDrop[];
   damageNumbers: DamageNumber[];
-  room: Room;
+  traps: Trap[];
+  dungeon: Dungeon;
   keys: Set<string>;
   mouse: Vector2;
   mouseDown: boolean;
@@ -116,6 +191,15 @@ export interface GameState {
   waveTimer: number;
   gameOver: boolean;
   paused: boolean;
+  transitionTimer: number;
+  transitionDirection: 'n' | 's' | 'e' | 'w' | null;
+  showInventory: boolean;
+  shopItems: ShopItem[];
+  showShop: boolean;
+  notification: { text: string; timer: number; color: string } | null;
+  time: number;
+  // legacy compat
+  room: DungeonRoom;
 }
 
 export interface HeroConfig {
@@ -128,51 +212,84 @@ export interface HeroConfig {
   attackRange: number;
   color: string;
   description: string;
+  startWeapon: Weapon;
 }
+
+const WEAPON_NAMES: Record<string, string[]> = {
+  common: ['Rusty Sword', 'Cracked Bow', 'Worn Staff', 'Blunt Dagger'],
+  rare: ['Iron Blade', 'Oak Longbow', 'Crystal Wand', 'Steel Stiletto'],
+  epic: ['Flamebrand', 'Shadow Bow', 'Arcane Scepter', 'Phantom Blade'],
+  legendary: ['Excalibur', 'Celestial Bow', 'Staff of Eternity', 'Void Fang'],
+};
+
+export function generateWeapon(rarity: WeaponRarity, isRanged?: boolean): Weapon {
+  const ranged = isRanged ?? Math.random() < 0.4;
+  const multipliers: Record<WeaponRarity, number> = {
+    common: 1, rare: 1.5, epic: 2.2, legendary: 3.5,
+  };
+  const m = multipliers[rarity];
+  const names = WEAPON_NAMES[rarity];
+  const effects: Array<'fire' | 'ice' | 'poison' | 'lightning'> = ['fire', 'ice', 'poison', 'lightning'];
+
+  const weapon: Weapon = {
+    id: Math.random().toString(36).slice(2, 9),
+    name: names[Math.floor(Math.random() * names.length)],
+    damage: Math.floor((10 + Math.random() * 10) * m),
+    attackSpeed: +(0.3 + Math.random() * 0.3).toFixed(2),
+    range: ranged ? 180 + Math.floor(Math.random() * 60) : 30 + Math.floor(Math.random() * 20),
+    rarity,
+    isRanged: ranged,
+  };
+
+  if (rarity === 'epic' || rarity === 'legendary' || (rarity === 'rare' && Math.random() < 0.3)) {
+    weapon.effect = effects[Math.floor(Math.random() * effects.length)];
+    weapon.effectChance = rarity === 'legendary' ? 0.5 : rarity === 'epic' ? 0.3 : 0.15;
+  }
+
+  return weapon;
+}
+
+export const RARITY_COLORS: Record<WeaponRarity, string> = {
+  common: '#9e9e9e',
+  rare: '#4dabf7',
+  epic: '#b197fc',
+  legendary: '#ffd43b',
+};
+
+export const EFFECT_COLORS: Record<string, string> = {
+  fire: '#e74c3c',
+  ice: '#74c0fc',
+  poison: '#51cf66',
+  lightning: '#ffd43b',
+};
 
 export const HERO_CONFIGS: Record<HeroClass, HeroConfig> = {
   warrior: {
     name: 'Warrior',
-    hp: 150,
-    mana: 50,
-    speed: 180,
-    damage: 25,
-    attackSpeed: 0.5,
-    attackRange: 40,
+    hp: 150, mana: 50, speed: 180, damage: 25, attackSpeed: 0.5, attackRange: 40,
     color: '#c0392b',
     description: 'High HP, melee focus, devastating close-range attacks',
+    startWeapon: { id: 'w_start', name: 'Iron Sword', damage: 25, attackSpeed: 0.5, range: 40, rarity: 'common', isRanged: false },
   },
   archer: {
     name: 'Archer',
-    hp: 80,
-    mana: 80,
-    speed: 220,
-    damage: 18,
-    attackSpeed: 0.3,
-    attackRange: 200,
+    hp: 80, mana: 80, speed: 220, damage: 18, attackSpeed: 0.3, attackRange: 200,
     color: '#27ae60',
     description: 'Fast and ranged, rains arrows from a distance',
+    startWeapon: { id: 'a_start', name: 'Short Bow', damage: 18, attackSpeed: 0.3, range: 200, rarity: 'common', isRanged: true },
   },
   mage: {
     name: 'Mage',
-    hp: 60,
-    mana: 150,
-    speed: 160,
-    damage: 30,
-    attackSpeed: 0.6,
-    attackRange: 180,
+    hp: 60, mana: 150, speed: 160, damage: 30, attackSpeed: 0.6, attackRange: 180,
     color: '#2980b9',
     description: 'Low HP but devastating magic projectiles',
+    startWeapon: { id: 'm_start', name: 'Apprentice Staff', damage: 30, attackSpeed: 0.6, range: 180, rarity: 'common', isRanged: true },
   },
   rogue: {
     name: 'Rogue',
-    hp: 90,
-    mana: 70,
-    speed: 250,
-    damage: 22,
-    attackSpeed: 0.25,
-    attackRange: 35,
+    hp: 90, mana: 70, speed: 250, damage: 22, attackSpeed: 0.25, attackRange: 35,
     color: '#8e44ad',
     description: 'Lightning fast with deadly backstab damage',
+    startWeapon: { id: 'r_start', name: 'Rusty Dagger', damage: 22, attackSpeed: 0.25, range: 35, rarity: 'common', isRanged: false },
   },
 };
