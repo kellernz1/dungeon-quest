@@ -1,5 +1,5 @@
 import { HeroClass, HERO_CONFIGS } from '@/game/types';
-import { Swords, Target, Wand2, Dagger } from 'lucide-react';
+import { Swords, Target, Wand2, Scissors } from 'lucide-react';
 
 interface HeroSelectProps {
   onSelect: (hero: HeroClass) => void;
@@ -9,7 +9,7 @@ const ICONS: Record<HeroClass, React.ReactNode> = {
   warrior: <Swords className="w-8 h-8" />,
   archer: <Target className="w-8 h-8" />,
   mage: <Wand2 className="w-8 h-8" />,
-  rogue: <Dagger className="w-8 h-8" />,
+  rogue: <Scissors className="w-8 h-8" />,
 };
 
 export default function HeroSelect({ onSelect }: HeroSelectProps) {

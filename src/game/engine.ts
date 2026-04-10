@@ -1,5 +1,5 @@
 import {
-  GameState, Player, Enemy, Projectile, Particle, LootDrop, DamageNumber,
+  GameState, Enemy,
   Room, Vector2, HeroClass, HERO_CONFIGS, EnemyType,
 } from './types';
 
