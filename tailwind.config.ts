@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['Cinzel', 'serif'],
+        body: ['Inter', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -46,6 +50,19 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        dungeon: {
+          floor: "hsl(var(--dungeon-floor))",
+          wall: "hsl(var(--dungeon-wall))",
+        },
+        health: "hsl(var(--health))",
+        mana: "hsl(var(--mana))",
+        xp: "hsl(var(--xp))",
+        loot: {
+          common: "hsl(var(--loot-common))",
+          rare: "hsl(var(--loot-rare))",
+          epic: "hsl(var(--loot-epic))",
+          legendary: "hsl(var(--loot-legendary))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
