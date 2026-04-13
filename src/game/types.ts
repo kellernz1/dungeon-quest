@@ -19,6 +19,7 @@ export type HeroClass = 'warrior' | 'archer' | 'mage' | 'rogue';
 export type EnemyType = 'goblin' | 'skeleton' | 'orc' | 'necromancer' | 'boss';
 export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type TrapType = 'spikes' | 'arrow_launcher' | 'fire_vent';
+export type LevelUpStat = 'hp' | 'attack' | 'speed' | 'mana';
 
 export interface Weapon {
   id: string;
@@ -55,6 +56,9 @@ export interface Player extends Entity {
   inventory: Weapon[];
   statusEffects: StatusEffect[];
   killCount: number;
+  dodgeTimer: number;
+  dodgeCooldownTimer: number;
+  baseSpeed: number;
 }
 
 export interface StatusEffect {
@@ -79,7 +83,7 @@ export interface Enemy extends Entity {
   isRanged: boolean;
   shootCooldown: number;
   shootTimer: number;
-  phaseHP?: number; // for boss phase transitions
+  phaseHP?: number;
   phase?: number;
   statusEffects: StatusEffect[];
 }
@@ -132,7 +136,21 @@ export interface Trap {
   cooldown: number;
   timer: number;
   active: boolean;
-  direction?: Vector2; // for arrow launchers
+  direction?: Vector2;
+}
+
+export interface Chest {
+  pos: Vector2;
+  rarity: WeaponRarity;
+  opened: boolean;
+  openTimer: number;
+  lootSpawned: boolean;
+}
+
+export interface Torch {
+  pos: Vector2;
+  radius: number;
+  flickerOffset: number;
 }
 
 export interface Door {
@@ -154,6 +172,8 @@ export interface DungeonRoom {
   walls: { x: number; y: number; w: number; h: number }[];
   enemies: Enemy[];
   traps: Trap[];
+  chests: Chest[];
+  torches: Torch[];
   cleared: boolean;
   doors: Door[];
   visited: boolean;
@@ -181,6 +201,8 @@ export interface GameState {
   loot: LootDrop[];
   damageNumbers: DamageNumber[];
   traps: Trap[];
+  chests: Chest[];
+  torches: Torch[];
   dungeon: Dungeon;
   keys: Set<string>;
   mouse: Vector2;
@@ -198,7 +220,7 @@ export interface GameState {
   showShop: boolean;
   notification: { text: string; timer: number; color: string } | null;
   time: number;
-  // legacy compat
+  levelUpChoices: LevelUpStat[] | null;
   room: DungeonRoom;
 }
 

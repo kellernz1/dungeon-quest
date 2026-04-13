@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { initGameState, updateGame, renderGame } from '@/game/engine';
-import { GameState, HeroClass, RARITY_COLORS, EFFECT_COLORS } from '@/game/types';
+import { initGameState, updateGame, applyLevelUpChoice } from '@/game/engine';
+import { renderGame } from '@/game/renderer';
+import { GameState, HeroClass, RARITY_COLORS, EFFECT_COLORS, LevelUpStat } from '@/game/types';
 
 interface GameCanvasProps {
   heroClass: HeroClass;
@@ -38,6 +39,15 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
       state.keys.add(key);
       if (e.key === ' ' || e.key === 'Tab') e.preventDefault();
 
+      // Level up choices (1-4)
+      if (state.levelUpChoices && key >= '1' && key <= '4') {
+        const idx = parseInt(key) - 1;
+        if (idx < state.levelUpChoices.length) {
+          applyLevelUpChoice(state, state.levelUpChoices[idx]);
+        }
+        return;
+      }
+
       // Shop interaction
       if (key === 'e' && state.showShop) {
         state.showShop = false;
@@ -59,7 +69,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
       }
 
       // Inventory weapon equip (1-8 while inventory open)
-      if (state.showInventory && key >= '1' && key <= '8') {
+      if (state.showInventory && !state.showShop && key >= '1' && key <= '8') {
         const idx = parseInt(key) - 1;
         if (idx < state.player.inventory.length) {
           const old = state.player.weapon;
@@ -176,7 +186,6 @@ function renderInventoryOverlay(ctx: CanvasRenderingContext2D, state: GameState)
   ctx.textAlign = 'center';
   ctx.fillText('INVENTORY', 400, 115);
 
-  // Equipped weapon
   ctx.font = '14px Inter';
   ctx.fillStyle = '#aaa';
   ctx.textAlign = 'left';
@@ -194,7 +203,6 @@ function renderInventoryOverlay(ctx: CanvasRenderingContext2D, state: GameState)
     ctx.fillText(`✦ ${p.weapon.effect} (${Math.floor((p.weapon.effectChance || 0) * 100)}%)`, 130, 212);
   }
 
-  // Inventory slots
   ctx.fillStyle = '#aaa';
   ctx.font = '13px Inter';
   ctx.fillText('Inventory (press 1-8 to equip, X to drop last):', 130, 245);
