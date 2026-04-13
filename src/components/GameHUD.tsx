@@ -96,7 +96,13 @@ export default function GameHUD({ state }: GameHUDProps) {
             {' '}Ability {p.abilityTimer > 0 ? `(${p.abilityTimer.toFixed(1)}s)` : '✓'}
           </span>
           <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">TAB</kbd> Inventory ({p.inventory.length}/8)
+            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">SHIFT</kbd> Dodge
+          </span>
+          <span>
+            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">E</kbd> Interact
+          </span>
+          <span>
+            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">TAB</kbd> Inv ({p.inventory.length}/8)
           </span>
         </div>
         <span className="capitalize">{room.theme} · {room.type} room</span>
