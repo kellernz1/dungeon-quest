@@ -1,6 +1,6 @@
 import {
-  GameState, Player, Enemy, DungeonRoom, Dungeon, Door, Trap,
-  Vector2, HeroClass, HERO_CONFIGS, EnemyType, WeaponRarity,
+  GameState, Player, Enemy, DungeonRoom, Dungeon, Door, Trap, Chest, Torch,
+  Vector2, HeroClass, HERO_CONFIGS, EnemyType, WeaponRarity, LevelUpStat,
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
 } from './types';
 
@@ -101,6 +101,47 @@ function createTrap(type: Trap['type'], x: number, y: number, dir?: Vector2): Tr
   };
 }
 
+// ── Torch & Chest Creation ──
+
+function createTorches(room: DungeonRoom): Torch[] {
+  const torches: Torch[] = [];
+  // Place torches along walls
+  const positions = [
+    { x: TILE * 3, y: TILE * 2 },
+    { x: ROOM_W - TILE * 3, y: TILE * 2 },
+    { x: TILE * 3, y: ROOM_H - TILE * 2 },
+    { x: ROOM_W - TILE * 3, y: ROOM_H - TILE * 2 },
+  ];
+  // Add mid-wall torches for larger rooms
+  if (room.type !== 'start') {
+    positions.push({ x: ROOM_W / 2, y: TILE * 2 });
+    positions.push({ x: ROOM_W / 2, y: ROOM_H - TILE * 2 });
+  }
+  for (const p of positions) {
+    torches.push({ pos: { ...p }, radius: 80 + Math.random() * 30, flickerOffset: Math.random() * Math.PI * 2 });
+  }
+  return torches;
+}
+
+function createChests(type: DungeonRoom['type'], tier: number): Chest[] {
+  const chests: Chest[] = [];
+  if (type === 'treasure') {
+    // Big chest in center
+    const rarity: WeaponRarity = tier >= 3 ? 'epic' : tier >= 2 ? 'rare' : 'common';
+    chests.push({ pos: { x: ROOM_W / 2, y: ROOM_H / 2 }, rarity, opened: false, openTimer: 0, lootSpawned: false });
+    // Side chests
+    chests.push({ pos: { x: ROOM_W / 2 - 80, y: ROOM_H / 2 + 40 }, rarity: 'common', opened: false, openTimer: 0, lootSpawned: false });
+    chests.push({ pos: { x: ROOM_W / 2 + 80, y: ROOM_H / 2 + 40 }, rarity: 'common', opened: false, openTimer: 0, lootSpawned: false });
+  } else if (type === 'combat' && Math.random() < 0.3) {
+    // Rare chance of chest in combat room
+    chests.push({
+      pos: { x: TILE * 4 + Math.random() * (ROOM_W - TILE * 8), y: TILE * 4 + Math.random() * (ROOM_H - TILE * 8) },
+      rarity: Math.random() < 0.1 ? 'rare' : 'common', opened: false, openTimer: 0, lootSpawned: false,
+    });
+  }
+  return chests;
+}
+
 // ── Dungeon Generation ──
 
 function generateDungeonRoom(
@@ -118,7 +159,6 @@ function generateDungeonRoom(
   const tierMul = 1 + (tier - 1) * 0.4;
 
   if (type === 'combat') {
-    // Interior walls
     const numWalls = 2 + Math.floor(Math.random() * 3);
     for (let i = 0; i < numWalls; i++) {
       const ox = TILE * 3 + Math.random() * (ROOM_W - TILE * 8);
@@ -126,7 +166,6 @@ function generateDungeonRoom(
       walls.push({ x: ox, y: oy, w: TILE * 2, h: TILE });
     }
 
-    // Enemies
     const count = 4 + tier * 2 + Math.floor(Math.random() * 3);
     const types: EnemyType[] = tier < 2
       ? ['goblin', 'goblin', 'skeleton']
@@ -141,7 +180,6 @@ function generateDungeonRoom(
       enemies.push(createEnemy(t, ex, ey, tierMul));
     }
 
-    // Traps
     const numTraps = Math.min(tier, 4);
     for (let i = 0; i < numTraps; i++) {
       const tx = TILE * 3 + Math.random() * (ROOM_W - TILE * 6);
@@ -155,55 +193,51 @@ function generateDungeonRoom(
     }
   } else if (type === 'boss') {
     enemies.push(createEnemy('boss', ROOM_W / 2, ROOM_H / 3, tierMul));
-    // Fire vents around arena
     traps.push(createTrap('fire_vent', 150, 150));
     traps.push(createTrap('fire_vent', ROOM_W - 150, 150));
     traps.push(createTrap('fire_vent', 150, ROOM_H - 150));
     traps.push(createTrap('fire_vent', ROOM_W - 150, ROOM_H - 150));
   } else if (type === 'treasure') {
-    // No enemies, just walls forming a vault shape
     walls.push({ x: ROOM_W / 2 - TILE * 3, y: ROOM_H / 2 - TILE, w: TILE * 6, h: TILE });
     walls.push({ x: ROOM_W / 2 - TILE * 3, y: ROOM_H / 2 + TILE, w: TILE * 6, h: TILE });
   }
 
-  return {
+  const room: DungeonRoom = {
     id, gridX, gridY, width: ROOM_W, height: ROOM_H,
-    walls, enemies, traps, cleared: type === 'start' || type === 'treasure' || type === 'shop',
+    walls, enemies, traps,
+    chests: createChests(type, tier),
+    torches: [],
+    cleared: type === 'start' || type === 'treasure' || type === 'shop',
     doors: [], visited: type === 'start',
     type, theme,
   };
+  room.torches = createTorches(room);
+  return room;
 }
 
 function generateDungeon(tier: number): Dungeon {
   const themes: DungeonRoom['theme'][] = ['cave', 'crypt', 'fortress', 'shadow'];
   const theme = themes[Math.min(tier - 1, 3)];
 
-  // Generate a grid layout: start → 3-5 combat rooms → boss
   const numCombat = 3 + Math.floor(Math.random() * 3);
   const rooms: DungeonRoom[] = [];
 
-  // Start room
   rooms.push(generateDungeonRoom(0, 0, 0, 'start', tier, theme));
 
-  // Combat rooms in a line with occasional branches
   let cx = 1;
-  let cy = 0;
+  const cy = 0;
   for (let i = 0; i < numCombat; i++) {
     const type = (i === Math.floor(numCombat / 2)) ? 'treasure' : 'combat';
     rooms.push(generateDungeonRoom(rooms.length, cx, cy, type, tier, theme));
     cx++;
   }
 
-  // Shop room as a branch
   rooms.push(generateDungeonRoom(rooms.length, Math.floor(numCombat / 2) + 1, 1, 'shop', tier, theme));
-
-  // Boss room
   rooms.push(generateDungeonRoom(rooms.length, cx, cy, 'boss', tier, theme));
 
   // Connect rooms with doors
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i];
-    // Find adjacent rooms
     for (let j = 0; j < rooms.length; j++) {
       if (i === j) continue;
       const o = rooms[j];
@@ -218,7 +252,6 @@ function generateDungeon(tier: number): Dungeon {
       else if (dy === 1) { dir = 's'; doorX = ROOM_W / 2 - 16; doorY = ROOM_H - TILE; }
       else { dir = 'n'; doorX = ROOM_W / 2 - 16; doorY = 0; }
 
-      // Check if door already exists
       if (!r.doors.find(d => d.direction === dir)) {
         r.doors.push({
           x: doorX, y: doorY, width: 32, height: 32,
@@ -253,7 +286,6 @@ function spawnLoot(state: GameState, pos: Vector2, goldValue: number, tier: numb
     });
   }
 
-  // Weapon drop
   const weaponChance = tier < 2 ? 0.08 : tier < 3 ? 0.1 : 0.12;
   if (Math.random() < weaponChance) {
     const roll = Math.random();
@@ -263,6 +295,31 @@ function spawnLoot(state: GameState, pos: Vector2, goldValue: number, tier: numb
       pos: { x: pos.x + (Math.random() - 0.5) * 20, y: pos.y + (Math.random() - 0.5) * 20 },
       type: 'weapon', value: 0, rarity, lifetime: 30, bobOffset: Math.random() * Math.PI * 2,
       weapon,
+    });
+  }
+}
+
+function spawnChestLoot(state: GameState, chest: Chest, tier: number) {
+  const pos = chest.pos;
+  // Gold piles
+  for (let i = 0; i < 3; i++) {
+    state.loot.push({
+      pos: { x: pos.x + (Math.random() - 0.5) * 40, y: pos.y + (Math.random() - 0.5) * 40 },
+      type: 'gold', value: 10 + tier * 8 + (chest.rarity === 'common' ? 0 : chest.rarity === 'rare' ? 15 : 40),
+      rarity: 'common', lifetime: 30, bobOffset: Math.random() * Math.PI * 2,
+    });
+  }
+  // Health
+  state.loot.push({
+    pos: { x: pos.x + (Math.random() - 0.5) * 30, y: pos.y + 20 },
+    type: 'health', value: 25 + tier * 10, rarity: 'common', lifetime: 30, bobOffset: Math.random() * Math.PI * 2,
+  });
+  // Weapon from non-common chests
+  if (chest.rarity !== 'common' || Math.random() < 0.4) {
+    const weapon = generateWeapon(chest.rarity);
+    state.loot.push({
+      pos: { x: pos.x, y: pos.y - 15 },
+      type: 'weapon', value: 0, rarity: chest.rarity, lifetime: 60, bobOffset: 0, weapon,
     });
   }
 }
@@ -278,7 +335,6 @@ function generateShopItems(tier: number): ShopItem[] {
     const prices: Record<WeaponRarity, number> = { common: 30, rare: 80, epic: 200, legendary: 500 };
     items.push({ weapon, price: prices[rarity] + tier * 20, sold: false });
   }
-  // Add health potion
   return items;
 }
 
@@ -291,7 +347,7 @@ function createPlayer(heroClass: HeroClass): Player {
     vel: { x: 0, y: 0 },
     width: 24, height: 24,
     hp: cfg.hp, maxHp: cfg.hp, alive: true,
-    speed: cfg.speed,
+    speed: cfg.speed, baseSpeed: cfg.speed,
     attackCooldown: cfg.attackSpeed, attackTimer: 0,
     attackDamage: cfg.damage, attackRange: cfg.attackRange,
     facing: { x: 1, y: 0 },
@@ -305,6 +361,8 @@ function createPlayer(heroClass: HeroClass): Player {
     inventory: [],
     statusEffects: [],
     killCount: 0,
+    dodgeTimer: 0,
+    dodgeCooldownTimer: 0,
   };
 }
 
@@ -321,6 +379,8 @@ export function initGameState(heroClass: HeroClass): GameState {
     loot: [],
     damageNumbers: [],
     traps: [...room.traps],
+    chests: [...room.chests],
+    torches: [...room.torches],
     dungeon,
     room,
     keys: new Set(),
@@ -339,6 +399,7 @@ export function initGameState(heroClass: HeroClass): GameState {
     showShop: false,
     notification: null,
     time: 0,
+    levelUpChoices: null,
   };
 }
 
@@ -389,38 +450,49 @@ function transitionToRoom(state: GameState, targetRoomId: number, direction: Doo
   state.room = room;
   state.enemies = [...room.enemies];
   state.traps = [...room.traps];
+  state.chests = [...room.chests];
+  state.torches = [...room.torches];
   state.projectiles = [];
   state.loot = [];
 
-  // Position player at opposite door
   const p = state.player;
   if (direction === 'e') { p.pos.x = TILE * 2; p.pos.y = ROOM_H / 2; }
   else if (direction === 'w') { p.pos.x = ROOM_W - TILE * 2; p.pos.y = ROOM_H / 2; }
   else if (direction === 's') { p.pos.x = ROOM_W / 2; p.pos.y = TILE * 2; }
   else { p.pos.x = ROOM_W / 2; p.pos.y = ROOM_H - TILE * 2; }
 
-  // Shop room
   if (room.type === 'shop' && state.shopItems.length === 0) {
     state.shopItems = generateShopItems(state.dungeon.tier);
     state.showShop = true;
   }
+}
 
-  // Treasure room — spawn loot
-  if (room.type === 'treasure') {
-    const rarity: WeaponRarity = state.dungeon.tier >= 3 ? 'epic' : 'rare';
-    const weapon = generateWeapon(rarity);
-    state.loot.push({
-      pos: { x: ROOM_W / 2, y: ROOM_H / 2 },
-      type: 'weapon', value: 0, rarity, lifetime: 60,
-      bobOffset: 0, weapon,
-    });
-    for (let i = 0; i < 5; i++) {
-      state.loot.push({
-        pos: { x: ROOM_W / 2 + (Math.random() - 0.5) * 80, y: ROOM_H / 2 + (Math.random() - 0.5) * 80 },
-        type: 'gold', value: 15 + state.dungeon.tier * 10, rarity: 'common', lifetime: 60, bobOffset: Math.random() * Math.PI * 2,
-      });
-    }
+// ── Level Up ──
+
+function triggerLevelUp(state: GameState) {
+  const p = state.player;
+  p.level++;
+  p.xp -= p.xpToNext;
+  p.xpToNext = Math.floor(p.xpToNext * 1.5);
+  spawnParticles(state, p.pos, '#f1c40f', 30);
+  spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 20 }, 0, '#f1c40f', false, 'LEVEL UP!');
+  notify(state, `Level ${p.level}! Choose an upgrade`, '#f1c40f');
+
+  // Show level up choices
+  state.levelUpChoices = ['hp', 'attack', 'speed', 'mana'];
+  state.paused = true;
+}
+
+export function applyLevelUpChoice(state: GameState, choice: LevelUpStat) {
+  const p = state.player;
+  switch (choice) {
+    case 'hp': p.maxHp += 15; p.hp = p.maxHp; break;
+    case 'attack': p.attackDamage += 5; break;
+    case 'speed': p.speed += 20; p.baseSpeed += 20; break;
+    case 'mana': p.maxMana += 20; p.mana = p.maxMana; break;
   }
+  state.levelUpChoices = null;
+  state.paused = false;
 }
 
 // ════════════════════════════════════════
@@ -428,7 +500,8 @@ function transitionToRoom(state: GameState, targetRoomId: number, direction: Doo
 // ════════════════════════════════════════
 
 export function updateGame(state: GameState, dt: number): void {
-  if (state.gameOver || state.paused) return;
+  if (state.gameOver) return;
+  if (state.paused) return;
   state.time += dt;
 
   // Transition animation
@@ -446,6 +519,17 @@ export function updateGame(state: GameState, dt: number): void {
   const p = state.player;
   const room = state.room;
 
+  // ── Dodge Roll ──
+  p.dodgeTimer -= dt;
+  p.dodgeCooldownTimer -= dt;
+
+  if (state.keys.has('shift') && p.dodgeCooldownTimer <= 0 && p.dodgeTimer <= 0 && (p.vel.x !== 0 || p.vel.y !== 0)) {
+    p.dodgeTimer = 0.25;
+    p.dodgeCooldownTimer = 0.8;
+    p.iFrames = 0.3;
+    spawnParticles(state, p.pos, '#aaa', 6);
+  }
+
   // ── Player Movement ──
   let dx = 0, dy = 0;
   if (state.keys.has('w') || state.keys.has('arrowup')) dy -= 1;
@@ -455,12 +539,19 @@ export function updateGame(state: GameState, dt: number): void {
 
   if (dx !== 0 || dy !== 0) {
     const dir = normalize({ x: dx, y: dy });
-    p.vel.x = dir.x * p.speed;
-    p.vel.y = dir.y * p.speed;
+    const speed = p.dodgeTimer > 0 ? p.speed * 2.5 : p.speed;
+    p.vel.x = dir.x * speed;
+    p.vel.y = dir.y * speed;
     p.facing = dir;
   } else {
-    p.vel.x = 0;
-    p.vel.y = 0;
+    if (p.dodgeTimer > 0) {
+      // Continue dodge in facing direction
+      p.vel.x = p.facing.x * p.speed * 2.5;
+      p.vel.y = p.facing.y * p.speed * 2.5;
+    } else {
+      p.vel.x = 0;
+      p.vel.y = 0;
+    }
   }
 
   // Freeze effect on player
@@ -502,6 +593,26 @@ export function updateGame(state: GameState, dt: number): void {
     state.showInventory = !state.showInventory;
   }
 
+  // ── Chest Interaction ──
+  for (const chest of state.chests) {
+    if (chest.opened) {
+      if (chest.openTimer > 0) chest.openTimer -= dt;
+      continue;
+    }
+    if (dist(p.pos, chest.pos) < 35 && state.keys.has('e')) {
+      state.keys.delete('e');
+      chest.opened = true;
+      chest.openTimer = 1.5;
+      spawnParticles(state, chest.pos, RARITY_COLORS[chest.rarity], 15);
+      state.screenShake = 0.05;
+      if (!chest.lootSpawned) {
+        chest.lootSpawned = true;
+        spawnChestLoot(state, chest, state.dungeon.tier);
+        notify(state, `Opened ${chest.rarity} chest!`, RARITY_COLORS[chest.rarity]);
+      }
+    }
+  }
+
   // ── Timers ──
   p.attackTimer -= dt;
   p.attackAnimTimer -= dt;
@@ -512,7 +623,7 @@ export function updateGame(state: GameState, dt: number): void {
   updateStatusEffects(p, dt, state);
 
   // ── Player Attack ──
-  if (state.mouseDown && p.attackTimer <= 0 && !state.showInventory && !state.showShop) {
+  if (state.mouseDown && p.attackTimer <= 0 && !state.showInventory && !state.showShop && p.dodgeTimer <= 0) {
     const w = p.weapon;
     p.attackTimer = w.attackSpeed;
     p.isAttacking = true;
@@ -548,13 +659,11 @@ export function updateGame(state: GameState, dt: number): void {
           spawnDamageNumber(state, e.pos, dmg, isCrit ? '#f1c40f' : '#e74c3c', isCrit);
           state.screenShake = isCrit ? 0.15 : 0.08;
 
-          // Weapon effect
           if (w.effect && w.effectChance && Math.random() < w.effectChance) {
             if (w.effect === 'fire') applyStatusEffect(e, 'burn', 5);
             else if (w.effect === 'ice') applyStatusEffect(e, 'freeze', 0);
             else if (w.effect === 'poison') applyStatusEffect(e, 'poison', 4);
             else if (w.effect === 'lightning') {
-              // Chain lightning
               for (const e2 of state.enemies) {
                 if (e2 === e || !e2.alive || dist(e.pos, e2.pos) > 100) continue;
                 e2.hp -= Math.floor(dmg * 0.4);
@@ -669,7 +778,6 @@ export function updateGame(state: GameState, dt: number): void {
         }
       }
     } else {
-      // Enemy projectile hitting player
       if (p.iFrames <= 0 && dist(proj.pos, p.pos) < proj.radius + p.width / 2) {
         p.hp -= proj.damage;
         p.iFrames = 0.5;
@@ -698,16 +806,13 @@ export function updateGame(state: GameState, dt: number): void {
       }
     }
 
-    // Damage entities on active traps
     if (trap.active && (trap.type === 'spikes' || trap.type === 'fire_vent')) {
-      // Player
       if (p.iFrames <= 0 && dist(p.pos, trap.pos) < trap.width) {
         p.hp -= Math.floor(trap.damage * 0.3);
         p.iFrames = 0.3;
         spawnDamageNumber(state, p.pos, Math.floor(trap.damage * 0.3), '#e74c3c');
         if (trap.type === 'fire_vent') applyStatusEffect(p, 'burn', 3);
       }
-      // Enemies too (friendly fire)
       for (const e of state.enemies) {
         if (!e.alive || e.knockbackTimer > 0) continue;
         if (dist(e.pos, trap.pos) < trap.width) {
@@ -735,11 +840,9 @@ export function updateGame(state: GameState, dt: number): void {
       continue;
     }
 
-    // Stun check
     if (e.statusEffects.some(s => s.type === 'stun')) continue;
 
     const d = dist(e.pos, p.pos);
-
     if (d < 250) e.state = 'chase';
 
     // Boss phase transition
@@ -754,26 +857,22 @@ export function updateGame(state: GameState, dt: number): void {
     }
 
     if (e.isRanged) {
-      // Ranged AI: keep distance, shoot
       if (e.state === 'chase') {
         if (d > 150) {
           const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
           e.pos.x += dir.x * e.speed * dt;
           e.pos.y += dir.y * e.speed * dt;
         } else if (d < 100) {
-          // Retreat
           const dir = normalize({ x: e.pos.x - p.pos.x, y: e.pos.y - p.pos.y });
           e.pos.x += dir.x * e.speed * 0.7 * dt;
           e.pos.y += dir.y * e.speed * 0.7 * dt;
         }
 
-        // Shoot
         if (e.shootTimer <= 0 && d < 300) {
           e.shootTimer = e.shootCooldown;
           const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
 
           if (e.type === 'boss' && e.phase === 2) {
-            // Boss shoots burst of 3
             for (let b = -1; b <= 1; b++) {
               const angle = Math.atan2(dir.y, dir.x) + b * 0.3;
               state.projectiles.push({
@@ -794,7 +893,6 @@ export function updateGame(state: GameState, dt: number): void {
         }
       }
     } else {
-      // Melee AI
       if (e.state === 'chase') {
         const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
         e.pos.x += dir.x * e.speed * dt;
@@ -821,7 +919,7 @@ export function updateGame(state: GameState, dt: number): void {
       }
     }
 
-    // Clamp enemy position
+    // Clamp enemy
     e.pos.x = Math.max(TILE + e.width / 2, Math.min(ROOM_W - TILE - e.width / 2, e.pos.x));
     e.pos.y = Math.max(TILE + e.height / 2, Math.min(ROOM_H - TILE - e.height / 2, e.pos.y));
 
@@ -829,22 +927,12 @@ export function updateGame(state: GameState, dt: number): void {
     if (e.hp <= 0) {
       e.alive = false;
       p.killCount++;
-      spawnParticles(state, e.pos, enemyColor(e.type), 15);
+      spawnParticles(state, e.pos, '#e74c3c', 15);
       spawnLoot(state, e.pos, e.goldValue, state.dungeon.tier);
       p.xp += e.xpValue;
 
       if (p.xp >= p.xpToNext) {
-        p.xp -= p.xpToNext;
-        p.level++;
-        p.xpToNext = Math.floor(p.xpToNext * 1.5);
-        p.maxHp += 10;
-        p.hp = p.maxHp;
-        p.attackDamage += 3;
-        p.maxMana += 10;
-        p.mana = p.maxMana;
-        spawnParticles(state, p.pos, '#f1c40f', 30);
-        spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 20 }, 0, '#f1c40f', false, 'LEVEL UP!');
-        notify(state, `Level ${p.level}!`, '#f1c40f');
+        triggerLevelUp(state);
       }
     }
   }
@@ -855,9 +943,7 @@ export function updateGame(state: GameState, dt: number): void {
   if (room.type !== 'start' && room.type !== 'treasure' && room.type !== 'shop' && !room.cleared && state.enemies.length === 0) {
     room.cleared = true;
     state.roomsCleared++;
-    // Unlock doors
     for (const door of room.doors) door.locked = false;
-    // Also unlock connected room doors pointing back
     for (const door of room.doors) {
       const targetRoom = state.dungeon.rooms[door.targetRoom];
       for (const td of targetRoom.doors) {
@@ -867,7 +953,6 @@ export function updateGame(state: GameState, dt: number): void {
     notify(state, 'ROOM CLEARED!', '#f1c40f');
     p.hp = Math.min(p.maxHp, p.hp + Math.floor(p.maxHp * 0.15));
 
-    // Boss clear → next dungeon tier
     if (room.type === 'boss') {
       const nextTier = state.dungeon.tier + 1;
       const themes: DungeonRoom['theme'][] = ['cave', 'crypt', 'fortress', 'shadow'];
@@ -880,6 +965,8 @@ export function updateGame(state: GameState, dt: number): void {
         state.room = startRoom;
         state.enemies = [...startRoom.enemies];
         state.traps = [...startRoom.traps];
+        state.chests = [...startRoom.chests];
+        state.torches = [...startRoom.torches];
         state.projectiles = [];
         state.loot = [];
         state.shopItems = [];
@@ -952,416 +1039,4 @@ export function updateGame(state: GameState, dt: number): void {
   // Clamp
   p.pos.x = Math.max(TILE + p.width / 2, Math.min(ROOM_W - TILE - p.width / 2, p.pos.x));
   p.pos.y = Math.max(TILE + p.height / 2, Math.min(ROOM_H - TILE - p.height / 2, p.pos.y));
-}
-
-// ════════════════════════════════════════
-// ── RENDER
-// ════════════════════════════════════════
-
-function enemyColor(type: EnemyType): string {
-  switch (type) {
-    case 'goblin': return '#2ecc71';
-    case 'skeleton': return '#bdc3c7';
-    case 'orc': return '#e67e22';
-    case 'necromancer': return '#b197fc';
-    case 'boss': return '#e74c3c';
-  }
-}
-
-const THEME_COLORS: Record<string, { floor1: string; floor2: string; wall: string; wallHighlight: string }> = {
-  cave: { floor1: '#2e2924', floor2: '#26221e', wall: '#1a1714', wallHighlight: '#332e28' },
-  crypt: { floor1: '#252530', floor2: '#1e1e28', wall: '#141420', wallHighlight: '#2e2e3a' },
-  fortress: { floor1: '#302820', floor2: '#28221a', wall: '#1c1610', wallHighlight: '#3a3228' },
-  shadow: { floor1: '#1a1a24', floor2: '#14141e', wall: '#0e0e16', wallHighlight: '#222230' },
-};
-
-export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time: number) {
-  const { player: p, room } = state;
-  const theme = THEME_COLORS[room.theme] || THEME_COLORS.cave;
-
-  ctx.save();
-
-  // Screen shake
-  if (state.screenShake > 0) {
-    ctx.translate(
-      (Math.random() - 0.5) * state.screenShake * 30,
-      (Math.random() - 0.5) * state.screenShake * 30,
-    );
-  }
-
-  // Transition fade
-  if (state.transitionTimer > 0) {
-    ctx.globalAlpha = 1 - state.transitionTimer / 0.3;
-  }
-
-  // ── Floor ──
-  ctx.fillStyle = theme.floor1;
-  ctx.fillRect(0, 0, ROOM_W, ROOM_H);
-  for (let x = TILE; x < ROOM_W - TILE; x += TILE) {
-    for (let y = TILE; y < ROOM_H - TILE; y += TILE) {
-      ctx.fillStyle = ((x + y) / TILE) % 2 === 0 ? theme.floor1 : theme.floor2;
-      ctx.fillRect(x, y, TILE, TILE);
-    }
-  }
-
-  // Floor details (cracks, etc.)
-  ctx.globalAlpha = 0.15;
-  for (let i = 0; i < 8; i++) {
-    const cx = TILE + ((i * 97) % (ROOM_W - TILE * 2));
-    const cy = TILE + ((i * 137) % (ROOM_H - TILE * 2));
-    ctx.fillStyle = '#000';
-    ctx.fillRect(cx, cy, 2 + (i % 3) * 2, 1);
-  }
-  ctx.globalAlpha = 1;
-
-  // ── Walls ──
-  for (const w of room.walls) {
-    ctx.fillStyle = theme.wall;
-    ctx.fillRect(w.x, w.y, w.w, w.h);
-    ctx.fillStyle = theme.wallHighlight;
-    ctx.fillRect(w.x, w.y, w.w, 3);
-    // Side highlight
-    ctx.fillStyle = theme.wallHighlight;
-    ctx.fillRect(w.x, w.y, 2, w.h);
-  }
-
-  // ── Doors ──
-  for (const door of room.doors) {
-    ctx.fillStyle = door.locked ? '#8b4513' : '#f1c40f';
-    ctx.fillRect(door.x, door.y, door.width, door.height);
-    if (door.locked) {
-      // Lock icon
-      ctx.fillStyle = '#555';
-      ctx.fillRect(door.x + 12, door.y + 8, 8, 10);
-      ctx.beginPath();
-      ctx.arc(door.x + 16, door.y + 10, 5, 0, Math.PI * 2);
-      ctx.strokeStyle = '#555';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    } else {
-      // Arrow indicator
-      ctx.fillStyle = '#333';
-      ctx.font = '16px Inter';
-      ctx.textAlign = 'center';
-      const arrows = { n: '▲', s: '▼', e: '►', w: '◄' };
-      ctx.fillText(arrows[door.direction], door.x + 16, door.y + 22);
-    }
-  }
-
-  // ── Traps ──
-  for (const trap of state.traps) {
-    ctx.save();
-    ctx.translate(trap.pos.x, trap.pos.y);
-
-    if (trap.type === 'spikes') {
-      ctx.fillStyle = trap.active ? '#888' : '#555';
-      ctx.fillRect(-trap.width / 2, -trap.height / 2, trap.width, trap.height);
-      if (trap.active) {
-        ctx.fillStyle = '#aaa';
-        for (let sx = -10; sx <= 10; sx += 5) {
-          for (let sy = -10; sy <= 10; sy += 5) {
-            ctx.fillRect(sx - 1, sy - 4, 2, 4);
-          }
-        }
-      }
-    } else if (trap.type === 'fire_vent') {
-      ctx.fillStyle = '#444';
-      ctx.beginPath();
-      ctx.arc(0, 0, trap.width / 2, 0, Math.PI * 2);
-      ctx.fill();
-      if (trap.active) {
-        ctx.fillStyle = 'rgba(231,76,60,0.5)';
-        ctx.beginPath();
-        ctx.arc(0, 0, trap.width, 0, Math.PI * 2);
-        ctx.fill();
-        spawnParticles(state, trap.pos, '#e74c3c', 1);
-      }
-    } else if (trap.type === 'arrow_launcher') {
-      ctx.fillStyle = '#666';
-      ctx.fillRect(-8, -8, 16, 16);
-      ctx.fillStyle = '#444';
-      ctx.fillRect(-4, -4, 8, 8);
-    }
-
-    ctx.restore();
-  }
-
-  // ── Loot ──
-  for (const l of state.loot) {
-    const bob = Math.sin(time * 3 + l.bobOffset) * 3;
-    ctx.save();
-    ctx.translate(l.pos.x, l.pos.y + bob);
-
-    if (l.type === 'gold') {
-      ctx.fillStyle = '#f1c40f';
-      ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#f39c12';
-      ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
-    } else if (l.type === 'health') {
-      ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(-4, -2, 8, 4);
-      ctx.fillRect(-2, -4, 4, 8);
-    } else if (l.type === 'mana') {
-      ctx.fillStyle = '#74c0fc';
-      ctx.beginPath();
-      ctx.moveTo(0, -6); ctx.lineTo(5, 4); ctx.lineTo(-5, 4);
-      ctx.closePath(); ctx.fill();
-    } else if (l.type === 'weapon') {
-      // Weapon glow
-      const rc = RARITY_COLORS[l.rarity];
-      ctx.shadowColor = rc;
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = rc;
-      ctx.fillRect(-6, -3, 12, 6);
-      ctx.fillRect(-3, -6, 6, 12);
-      ctx.shadowBlur = 0;
-    }
-    ctx.restore();
-  }
-
-  // ── Enemies ──
-  for (const e of state.enemies) {
-    if (!e.alive) continue;
-    ctx.save();
-    ctx.translate(e.pos.x, e.pos.y);
-
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath();
-    ctx.ellipse(0, e.height / 2, e.width / 2, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    const baseColor = e.flashTimer > 0 ? '#fff' :
-      e.statusEffects.some(s => s.type === 'freeze') ? '#74c0fc' :
-      e.statusEffects.some(s => s.type === 'burn') ? '#ff7f50' :
-      e.statusEffects.some(s => s.type === 'poison') ? '#98fb98' :
-      enemyColor(e.type);
-    ctx.fillStyle = baseColor;
-
-    if (e.type === 'boss') {
-      ctx.beginPath(); ctx.arc(0, 0, e.width / 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = e.phase === 2 ? '#ff0000' : '#c0392b';
-      ctx.fillRect(-e.width / 2, -e.height / 2 - 8, 6, 10);
-      ctx.fillRect(e.width / 2 - 6, -e.height / 2 - 8, 6, 10);
-      // Aura for phase 2
-      if (e.phase === 2) {
-        ctx.globalAlpha = 0.2 + Math.sin(time * 5) * 0.1;
-        ctx.fillStyle = '#e74c3c';
-        ctx.beginPath(); ctx.arc(0, 0, e.width / 2 + 8, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    } else if (e.type === 'necromancer') {
-      ctx.beginPath(); ctx.arc(0, 0, e.width / 2, 0, Math.PI * 2); ctx.fill();
-      // Hat
-      ctx.fillStyle = '#4a0080';
-      ctx.beginPath();
-      ctx.moveTo(0, -e.height / 2 - 10);
-      ctx.lineTo(-8, -e.height / 2 + 2);
-      ctx.lineTo(8, -e.height / 2 + 2);
-      ctx.closePath(); ctx.fill();
-    } else {
-      ctx.fillRect(-e.width / 2, -e.height / 2, e.width, e.height);
-    }
-
-    // Eyes
-    ctx.fillStyle = e.type === 'necromancer' ? '#b197fc' : '#c0392b';
-    ctx.fillRect(-4, -3, 3, 3);
-    ctx.fillRect(2, -3, 3, 3);
-
-    // HP bar
-    if (e.hp < e.maxHp) {
-      const barW = Math.max(e.width, 30);
-      ctx.fillStyle = '#333';
-      ctx.fillRect(-barW / 2, -e.height / 2 - 8, barW, 4);
-      ctx.fillStyle = e.type === 'boss' ? '#ff4444' : '#e74c3c';
-      ctx.fillRect(-barW / 2, -e.height / 2 - 8, barW * (e.hp / e.maxHp), 4);
-    }
-
-    ctx.restore();
-  }
-
-  // ── Player ──
-  if (p.alive) {
-    ctx.save();
-    ctx.translate(p.pos.x, p.pos.y);
-
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath();
-    ctx.ellipse(0, p.height / 2, p.width / 2 + 2, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (p.iFrames > 0 && Math.floor(p.iFrames * 20) % 2 === 0) {
-      ctx.globalAlpha = 0.4;
-    }
-
-    const cfg = HERO_CONFIGS[p.heroClass];
-    ctx.fillStyle = cfg.color;
-    ctx.beginPath();
-    ctx.arc(0, 0, p.width / 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.beginPath();
-    ctx.arc(-3, -3, p.width / 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Eyes
-    ctx.fillStyle = '#fff';
-    const ex = p.facing.x * 3;
-    const ey = p.facing.y * 3;
-    ctx.fillRect(ex - 3, ey - 3, 3, 3);
-    ctx.fillRect(ex + 1, ey - 3, 3, 3);
-
-    ctx.globalAlpha = 1;
-
-    // Attack arc
-    if (p.attackAnimTimer > 0) {
-      const wColor = p.weapon.effect ? EFFECT_COLORS[p.weapon.effect] : 'rgba(255,255,255,0.6)';
-      ctx.strokeStyle = wColor;
-      ctx.lineWidth = 2;
-      const angle = Math.atan2(p.facing.y, p.facing.x);
-      ctx.beginPath();
-      ctx.arc(0, 0, p.weapon.range, angle - 0.6, angle + 0.6);
-      ctx.stroke();
-    }
-
-    // Status effect indicators
-    if (p.statusEffects.length > 0) {
-      let ox = -p.statusEffects.length * 5;
-      for (const se of p.statusEffects) {
-        ctx.fillStyle = se.type === 'burn' ? '#e74c3c' : se.type === 'freeze' ? '#74c0fc' : '#51cf66';
-        ctx.fillRect(ox, -p.height / 2 - 10, 4, 4);
-        ox += 10;
-      }
-    }
-
-    ctx.restore();
-  }
-
-  // ── Projectiles ──
-  for (const proj of state.projectiles) {
-    ctx.save();
-    ctx.translate(proj.pos.x, proj.pos.y);
-    ctx.fillStyle = proj.color || (proj.fromPlayer ? '#ccc' : '#e74c3c');
-    ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = (proj.color || '#e74c3c') + '44';
-    ctx.beginPath(); ctx.arc(0, 0, proj.radius * 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-
-  // ── Particles ──
-  for (const part of state.particles) {
-    ctx.globalAlpha = part.lifetime / part.maxLifetime;
-    ctx.fillStyle = part.color;
-    ctx.fillRect(part.pos.x - part.size / 2, part.pos.y - part.size / 2, part.size, part.size);
-  }
-  ctx.globalAlpha = 1;
-
-  // ── Damage Numbers ──
-  for (const dn of state.damageNumbers) {
-    ctx.globalAlpha = dn.lifetime / 0.8;
-    ctx.font = dn.isCrit ? 'bold 18px Inter' : '14px Inter';
-    ctx.fillStyle = dn.color;
-    ctx.textAlign = 'center';
-    ctx.fillText(dn.text || (dn.value === 0 ? 'LEVEL UP!' : dn.value.toString()), dn.pos.x, dn.pos.y);
-  }
-  ctx.globalAlpha = 1;
-
-  // ── Notification ──
-  if (state.notification) {
-    const n = state.notification;
-    ctx.globalAlpha = Math.min(1, n.timer);
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(ROOM_W / 2 - 150, 50, 300, 36);
-    ctx.font = 'bold 16px Cinzel';
-    ctx.fillStyle = n.color;
-    ctx.textAlign = 'center';
-    ctx.fillText(n.text, ROOM_W / 2, 74);
-    ctx.globalAlpha = 1;
-  }
-
-  // ── Minimap ──
-  renderMinimap(ctx, state);
-
-  // ── Room type label ──
-  if (room.type === 'shop') {
-    ctx.font = 'bold 20px Cinzel';
-    ctx.fillStyle = '#f1c40f';
-    ctx.textAlign = 'center';
-    ctx.fillText('SHOP', ROOM_W / 2, ROOM_H / 2 - 60);
-    ctx.font = '12px Inter';
-    ctx.fillStyle = '#aaa';
-    ctx.fillText('Press E to browse', ROOM_W / 2, ROOM_H / 2 - 40);
-  }
-
-  // ── Game Over ──
-  if (state.gameOver) {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
-    ctx.font = 'bold 36px Cinzel';
-    ctx.fillStyle = '#e74c3c';
-    ctx.textAlign = 'center';
-    ctx.fillText('DEFEATED', ROOM_W / 2, ROOM_H / 2 - 40);
-    ctx.font = '16px Inter';
-    ctx.fillStyle = '#bdc3c7';
-    ctx.fillText(`Tier ${state.dungeon.tier} · ${state.roomsCleared} rooms · ${p.killCount} kills · ${p.gold} gold`, ROOM_W / 2, ROOM_H / 2);
-    ctx.fillText(`Level ${p.level} ${HERO_CONFIGS[p.heroClass].name}`, ROOM_W / 2, ROOM_H / 2 + 25);
-    ctx.fillStyle = '#f1c40f';
-    ctx.fillText('Click to restart', ROOM_W / 2, ROOM_H / 2 + 60);
-  }
-
-  ctx.restore();
-}
-
-// ── Minimap ──
-
-function renderMinimap(ctx: CanvasRenderingContext2D, state: GameState) {
-  const mm = { x: ROOM_W - 140, y: 8, cellW: 18, cellH: 14 };
-  ctx.save();
-  ctx.globalAlpha = 0.8;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(mm.x - 4, mm.y - 4, 138, 80);
-
-  for (const room of state.dungeon.rooms) {
-    if (!room.visited) continue;
-    const rx = mm.x + room.gridX * (mm.cellW + 3);
-    const ry = mm.y + room.gridY * (mm.cellH + 3);
-
-    const isCurrent = room.id === state.dungeon.currentRoomId;
-    const colors: Record<string, string> = {
-      start: '#555', combat: room.cleared ? '#2d5a2d' : '#5a2d2d',
-      treasure: '#5a5a2d', boss: '#5a1a1a', shop: '#2d4a5a',
-    };
-    ctx.fillStyle = colors[room.type] || '#444';
-    ctx.fillRect(rx, ry, mm.cellW, mm.cellH);
-
-    if (isCurrent) {
-      ctx.strokeStyle = '#f1c40f';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(rx, ry, mm.cellW, mm.cellH);
-    }
-
-    // Room type icons
-    ctx.font = '8px Inter';
-    ctx.fillStyle = '#ccc';
-    ctx.textAlign = 'center';
-    const labels: Record<string, string> = { boss: '☠', treasure: '♦', shop: '$', start: '•' };
-    if (labels[room.type]) ctx.fillText(labels[room.type], rx + mm.cellW / 2, ry + mm.cellH / 2 + 3);
-
-    // Draw connections
-    for (const door of room.doors) {
-      const target = state.dungeon.rooms[door.targetRoom];
-      if (!target.visited) continue;
-      ctx.strokeStyle = door.locked ? '#5a3a1a' : '#666';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(rx + mm.cellW / 2, ry + mm.cellH / 2);
-      const tx = mm.x + target.gridX * (mm.cellW + 3) + mm.cellW / 2;
-      const ty = mm.y + target.gridY * (mm.cellH + 3) + mm.cellH / 2;
-      ctx.lineTo(tx, ty);
-      ctx.stroke();
-    }
-  }
-
-  ctx.restore();
 }
