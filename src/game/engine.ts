@@ -406,6 +406,7 @@ export function initGameState(heroClass: HeroClass): GameState {
     notification: null,
     time: 0,
     levelUpChoices: null,
+    showSkillTree: false,
   };
 }
 
