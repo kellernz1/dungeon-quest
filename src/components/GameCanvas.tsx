@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { initGameState, updateGame, applyLevelUpChoice } from '@/game/engine';
 import { renderGame } from '@/game/renderer';
+import { audio } from '@/game/audio';
 import { GameState, HeroClass, RARITY_COLORS, EFFECT_COLORS, LevelUpStat } from '@/game/types';
 
 interface GameCanvasProps {
