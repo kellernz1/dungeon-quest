@@ -682,12 +682,17 @@ export function updateGame(state: GameState, dt: number): void {
   // ── Player Attack ──
   if (state.mouseDown && p.attackTimer <= 0 && !state.showInventory && !state.showShop && p.dodgeTimer <= 0) {
     const w = p.weapon;
-    p.attackTimer = w.attackSpeed;
+    const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+    p.attackTimer = w.attackSpeed * (1 - Math.min(0.7, sb.attackSpeedMul));
     p.isAttacking = true;
     p.attackAnimTimer = 0.15;
 
     const dir = normalize({ x: state.mouse.x - p.pos.x, y: state.mouse.y - p.pos.y });
     p.facing = dir;
+
+    const critChance = 0.15 + sb.critChance;
+    const critMul = 2 + sb.critDamage;
+    const procMul = 1 + sb.effectChanceMul;
 
     if (w.isRanged) {
       const speed = 400;
@@ -705,12 +710,14 @@ export function updateGame(state: GameState, dt: number): void {
       audio.play('attack_melee');
       const attackPos = { x: p.pos.x + dir.x * w.range, y: p.pos.y + dir.y * w.range };
       let didHit = false;
+      let totalDealt = 0;
       for (const e of state.enemies) {
         if (!e.alive) continue;
         if (dist(attackPos, e.pos) < w.range + e.width / 2) {
-          const isCrit = Math.random() < 0.15;
-          const dmg = Math.floor((isCrit ? 2 : 1) * (w.damage + p.attackDamage * 0.3));
+          const isCrit = Math.random() < critChance;
+          const dmg = Math.floor((isCrit ? critMul : 1) * (w.damage + p.attackDamage * 0.3));
           e.hp -= dmg;
+          totalDealt += dmg;
           e.flashTimer = 0.1;
           e.knockbackTimer = 0.15;
           const kb = normalize({ x: e.pos.x - p.pos.x, y: e.pos.y - p.pos.y });
@@ -720,7 +727,8 @@ export function updateGame(state: GameState, dt: number): void {
           state.screenShake = isCrit ? 0.15 : 0.08;
           didHit = true;
 
-          if (w.effect && w.effectChance && Math.random() < w.effectChance) {
+          const procChance = (w.effectChance ?? 0) * procMul;
+          if (w.effect && Math.random() < procChance) {
             if (w.effect === 'fire') applyStatusEffect(e, 'burn', 5);
             else if (w.effect === 'ice') applyStatusEffect(e, 'freeze', 0);
             else if (w.effect === 'poison') applyStatusEffect(e, 'poison', 4);
@@ -736,6 +744,12 @@ export function updateGame(state: GameState, dt: number): void {
         }
       }
       if (didHit) audio.play('hit');
+      // Life steal on melee hits
+      if (sb.lifeSteal > 0 && totalDealt > 0) {
+        const heal = Math.max(1, Math.floor(totalDealt * sb.lifeSteal));
+        p.hp = Math.min(p.maxHp, p.hp + heal);
+        spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 8 }, heal, '#2ecc71');
+      }
       spawnParticles(state, attackPos, '#aaa', 3);
     }
   }
