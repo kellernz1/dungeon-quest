@@ -66,6 +66,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
             state.player.gold -= item.price;
             state.player.inventory.push(item.weapon);
             item.sold = true;
+            audio.play('shop_buy');
           }
         }
       }
