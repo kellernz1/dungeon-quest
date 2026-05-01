@@ -3,6 +3,7 @@ import {
   Vector2, HeroClass, HERO_CONFIGS, EnemyType, WeaponRarity, LevelUpStat,
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
 } from './types';
+import { audio } from './audio';
 
 const TILE = 32;
 const ROOM_W = 800;
