@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { initGameState, updateGame, applyLevelUpChoice } from '@/game/engine';
 import { renderGame } from '@/game/renderer';
+import { audio } from '@/game/audio';
 import { GameState, HeroClass, RARITY_COLORS, EFFECT_COLORS, LevelUpStat } from '@/game/types';
 
 interface GameCanvasProps {
@@ -35,6 +36,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
     const state = stateRef.current;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      audio.unlock();
       const key = e.key.toLowerCase();
       state.keys.add(key);
       if (e.key === ' ' || e.key === 'Tab') e.preventDefault();
@@ -64,6 +66,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
             state.player.gold -= item.price;
             state.player.inventory.push(item.weapon);
             item.sold = true;
+            audio.play('shop_buy');
           }
         }
       }
@@ -102,6 +105,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      audio.unlock();
       if (e.button === 0) {
         if (state.gameOver) { restart(); return; }
         state.mouseDown = true;

@@ -3,6 +3,7 @@ import {
   Vector2, HeroClass, HERO_CONFIGS, EnemyType, WeaponRarity, LevelUpStat,
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
 } from './types';
+import { audio } from './audio';
 
 const TILE = 32;
 const ROOM_W = 800;
@@ -454,6 +455,7 @@ function transitionToRoom(state: GameState, targetRoomId: number, direction: Doo
   state.torches = [...room.torches];
   state.projectiles = [];
   state.loot = [];
+  audio.play('door');
 
   const p = state.player;
   if (direction === 'e') { p.pos.x = TILE * 2; p.pos.y = ROOM_H / 2; }
@@ -477,6 +479,7 @@ function triggerLevelUp(state: GameState) {
   spawnParticles(state, p.pos, '#f1c40f', 30);
   spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 20 }, 0, '#f1c40f', false, 'LEVEL UP!');
   notify(state, `Level ${p.level}! Choose an upgrade`, '#f1c40f');
+  audio.play('level_up');
 
   // Show level up choices
   state.levelUpChoices = ['hp', 'attack', 'speed', 'mana'];
@@ -528,6 +531,7 @@ export function updateGame(state: GameState, dt: number): void {
     p.dodgeCooldownTimer = 0.8;
     p.iFrames = 0.3;
     spawnParticles(state, p.pos, '#aaa', 6);
+    audio.play('dodge');
   }
 
   // ── Player Movement ──
@@ -605,6 +609,7 @@ export function updateGame(state: GameState, dt: number): void {
       chest.openTimer = 1.5;
       spawnParticles(state, chest.pos, RARITY_COLORS[chest.rarity], 15);
       state.screenShake = 0.05;
+      audio.play('chest_open');
       if (!chest.lootSpawned) {
         chest.lootSpawned = true;
         spawnChestLoot(state, chest, state.dungeon.tier);
@@ -643,8 +648,11 @@ export function updateGame(state: GameState, dt: number): void {
         effect: w.effect,
       });
       spawnParticles(state, p.pos, w.effect ? EFFECT_COLORS[w.effect] : '#ccc', 3);
+      audio.play('attack_ranged');
     } else {
+      audio.play('attack_melee');
       const attackPos = { x: p.pos.x + dir.x * w.range, y: p.pos.y + dir.y * w.range };
+      let didHit = false;
       for (const e of state.enemies) {
         if (!e.alive) continue;
         if (dist(attackPos, e.pos) < w.range + e.width / 2) {
@@ -658,6 +666,7 @@ export function updateGame(state: GameState, dt: number): void {
           spawnParticles(state, e.pos, '#e74c3c', 5);
           spawnDamageNumber(state, e.pos, dmg, isCrit ? '#f1c40f' : '#e74c3c', isCrit);
           state.screenShake = isCrit ? 0.15 : 0.08;
+          didHit = true;
 
           if (w.effect && w.effectChance && Math.random() < w.effectChance) {
             if (w.effect === 'fire') applyStatusEffect(e, 'burn', 5);
@@ -674,6 +683,7 @@ export function updateGame(state: GameState, dt: number): void {
           }
         }
       }
+      if (didHit) audio.play('hit');
       spawnParticles(state, attackPos, '#aaa', 3);
     }
   }
@@ -682,6 +692,7 @@ export function updateGame(state: GameState, dt: number): void {
   if (state.keys.has(' ') && p.abilityTimer <= 0 && p.mana >= 20) {
     p.abilityTimer = p.abilityCooldown;
     p.mana -= 20;
+    audio.play('ability');
 
     if (p.heroClass === 'warrior') {
       for (const e of state.enemies) {
@@ -784,6 +795,7 @@ export function updateGame(state: GameState, dt: number): void {
         spawnParticles(state, p.pos, '#e74c3c', 6);
         spawnDamageNumber(state, p.pos, proj.damage, '#ff6b6b');
         state.screenShake = 0.12;
+        audio.play('player_hurt');
         state.projectiles.splice(i, 1);
       }
     }
@@ -908,6 +920,7 @@ export function updateGame(state: GameState, dt: number): void {
           spawnParticles(state, p.pos, '#e74c3c', 6);
           spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
           state.screenShake = 0.12;
+          audio.play('player_hurt');
         }
       } else {
         if (Math.random() < 0.01) {
@@ -930,6 +943,7 @@ export function updateGame(state: GameState, dt: number): void {
       spawnParticles(state, e.pos, '#e74c3c', 15);
       spawnLoot(state, e.pos, e.goldValue, state.dungeon.tier);
       p.xp += e.xpValue;
+      audio.play('enemy_death');
 
       if (p.xp >= p.xpToNext) {
         triggerLevelUp(state);
@@ -986,16 +1000,20 @@ export function updateGame(state: GameState, dt: number): void {
       if (l.type === 'gold') {
         p.gold += l.value;
         spawnDamageNumber(state, l.pos, l.value, '#f1c40f');
+        audio.play('pickup_gold');
       } else if (l.type === 'health') {
         p.hp = Math.min(p.maxHp, p.hp + l.value);
         spawnDamageNumber(state, l.pos, l.value, '#2ecc71');
+        audio.play('pickup_health');
       } else if (l.type === 'mana') {
         p.mana = Math.min(p.maxMana, p.mana + l.value);
         spawnDamageNumber(state, l.pos, l.value, '#74c0fc');
+        audio.play('pickup_health');
       } else if (l.type === 'weapon' && l.weapon) {
         if (p.inventory.length < 8) {
           p.inventory.push(l.weapon);
           notify(state, `Found: ${l.weapon.name} (${l.weapon.rarity})`, RARITY_COLORS[l.weapon.rarity]);
+          audio.play('pickup_weapon');
         } else {
           notify(state, 'Inventory full!', '#e74c3c');
           continue;
@@ -1030,10 +1048,11 @@ export function updateGame(state: GameState, dt: number): void {
   if (state.screenShake < 0.01) state.screenShake = 0;
 
   // Player death
-  if (p.hp <= 0) {
+  if (p.hp <= 0 && p.alive) {
     p.alive = false;
     state.gameOver = true;
     spawnParticles(state, p.pos, '#e74c3c', 30);
+    audio.play('game_over');
   }
 
   // Clamp

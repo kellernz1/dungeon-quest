@@ -1,15 +1,23 @@
+import { useState } from 'react';
 import { GameState, HERO_CONFIGS, RARITY_COLORS, EFFECT_COLORS } from '@/game/types';
-import { Heart, Zap, Coins, Shield, Star, Skull, Swords } from 'lucide-react';
+import { audio } from '@/game/audio';
+import { Heart, Zap, Coins, Shield, Star, Skull, Swords, Volume2, VolumeX } from 'lucide-react';
 
 interface GameHUDProps {
   state: GameState | null;
 }
 
 export default function GameHUD({ state }: GameHUDProps) {
+  const [muted, setMuted] = useState(audio.isMuted());
   if (!state) return null;
   const { player: p, dungeon } = state;
   const cfg = HERO_CONFIGS[p.heroClass];
   const room = state.room;
+
+  const handleToggleMute = () => {
+    audio.unlock();
+    setMuted(audio.toggle());
+  };
 
   const rarityColor = RARITY_COLORS[p.weapon.rarity];
 
@@ -80,6 +88,16 @@ export default function GameHUD({ state }: GameHUDProps) {
             <span className="text-foreground font-medium">{state.enemies.length}</span>
           </div>
         </div>
+
+        {/* Mute toggle */}
+        <button
+          onClick={handleToggleMute}
+          aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+          title={muted ? 'Unmute (audio off)' : 'Mute (audio on)'}
+          className="shrink-0 w-8 h-8 rounded-md border border-border bg-secondary hover:bg-accent transition-colors flex items-center justify-center text-foreground"
+        >
+          {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* Bottom controls */}
