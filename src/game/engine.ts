@@ -1015,7 +1015,8 @@ export function updateGame(state: GameState, dt: number): void {
       p.killCount++;
       spawnParticles(state, e.pos, '#e74c3c', 15);
       spawnLoot(state, e.pos, e.goldValue, state.dungeon.tier);
-      p.xp += e.xpValue;
+      const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+      p.xp += Math.floor(e.xpValue * (1 + sb.xpMul));
       audio.play('enemy_death');
 
       if (p.xp >= p.xpToNext) {
