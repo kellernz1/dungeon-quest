@@ -8,10 +8,16 @@ interface GameHUDProps {
 }
 
 export default function GameHUD({ state }: GameHUDProps) {
+  const [muted, setMuted] = useState(audio.isMuted());
   if (!state) return null;
   const { player: p, dungeon } = state;
   const cfg = HERO_CONFIGS[p.heroClass];
   const room = state.room;
+
+  const handleToggleMute = () => {
+    audio.unlock();
+    setMuted(audio.toggle());
+  };
 
   const rarityColor = RARITY_COLORS[p.weapon.rarity];
 
