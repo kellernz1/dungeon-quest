@@ -680,7 +680,7 @@ export function updateGame(state: GameState, dt: number): void {
   updateStatusEffects(p, dt, state);
 
   // ── Player Attack ──
-  if (state.mouseDown && p.attackTimer <= 0 && !state.showInventory && !state.showShop && p.dodgeTimer <= 0) {
+  if (state.mouseDown && p.attackTimer <= 0 && !state.showInventory && !state.showShop && !state.showSkillTree && p.dodgeTimer <= 0) {
     const w = p.weapon;
     const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
     p.attackTimer = w.attackSpeed * (1 - Math.min(0.7, sb.attackSpeedMul));
