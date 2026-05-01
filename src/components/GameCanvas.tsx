@@ -161,6 +161,11 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         renderShopOverlay(ctx, stateRef.current);
       }
 
+      // Draw skill tree overlay
+      if (stateRef.current.showSkillTree) {
+        renderSkillTreeOverlay(ctx, stateRef.current);
+      }
+
       // Throttle React state updates
       if (frameCount % 6 === 0) {
         onStateChange?.({ ...stateRef.current, player: { ...stateRef.current.player } });
