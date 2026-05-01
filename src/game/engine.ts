@@ -479,6 +479,7 @@ function triggerLevelUp(state: GameState) {
   spawnParticles(state, p.pos, '#f1c40f', 30);
   spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 20 }, 0, '#f1c40f', false, 'LEVEL UP!');
   notify(state, `Level ${p.level}! Choose an upgrade`, '#f1c40f');
+  audio.play('level_up');
 
   // Show level up choices
   state.levelUpChoices = ['hp', 'attack', 'speed', 'mana'];
