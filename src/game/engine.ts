@@ -578,9 +578,10 @@ export function updateGame(state: GameState, dt: number): void {
   p.dodgeCooldownTimer -= dt;
 
   if (state.keys.has('shift') && p.dodgeCooldownTimer <= 0 && p.dodgeTimer <= 0 && (p.vel.x !== 0 || p.vel.y !== 0)) {
+    const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
     p.dodgeTimer = 0.25;
-    p.dodgeCooldownTimer = 0.8;
-    p.iFrames = 0.3;
+    p.dodgeCooldownTimer = 0.8 * (1 - sb.dodgeCooldownMul);
+    p.iFrames = 0.3 * (1 + sb.iFrameMul);
     spawnParticles(state, p.pos, '#aaa', 6);
     audio.play('dodge');
   }
