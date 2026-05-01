@@ -51,6 +51,16 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         return;
       }
 
+      // Toggle skill tree (K) — close any other overlays first
+      if (key === 'k') {
+        state.showSkillTree = !state.showSkillTree;
+        if (state.showSkillTree) {
+          state.showInventory = false;
+          state.showShop = false;
+        }
+        return;
+      }
+
       // Shop interaction
       if (key === 'e' && state.showShop) {
         state.showShop = false;
