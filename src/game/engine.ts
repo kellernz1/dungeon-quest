@@ -531,6 +531,7 @@ export function updateGame(state: GameState, dt: number): void {
     p.dodgeCooldownTimer = 0.8;
     p.iFrames = 0.3;
     spawnParticles(state, p.pos, '#aaa', 6);
+    audio.play('dodge');
   }
 
   // ── Player Movement ──
