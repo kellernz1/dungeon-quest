@@ -1000,16 +1000,20 @@ export function updateGame(state: GameState, dt: number): void {
       if (l.type === 'gold') {
         p.gold += l.value;
         spawnDamageNumber(state, l.pos, l.value, '#f1c40f');
+        audio.play('pickup_gold');
       } else if (l.type === 'health') {
         p.hp = Math.min(p.maxHp, p.hp + l.value);
         spawnDamageNumber(state, l.pos, l.value, '#2ecc71');
+        audio.play('pickup_health');
       } else if (l.type === 'mana') {
         p.mana = Math.min(p.maxMana, p.mana + l.value);
         spawnDamageNumber(state, l.pos, l.value, '#74c0fc');
+        audio.play('pickup_health');
       } else if (l.type === 'weapon' && l.weapon) {
         if (p.inventory.length < 8) {
           p.inventory.push(l.weapon);
           notify(state, `Found: ${l.weapon.name} (${l.weapon.rarity})`, RARITY_COLORS[l.weapon.rarity]);
+          audio.play('pickup_weapon');
         } else {
           notify(state, 'Inventory full!', '#e74c3c');
           continue;
