@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { GameState, HERO_CONFIGS, RARITY_COLORS, EFFECT_COLORS } from '@/game/types';
-import { Heart, Zap, Coins, Shield, Star, Skull, Swords } from 'lucide-react';
+import { audio } from '@/game/audio';
+import { Heart, Zap, Coins, Shield, Star, Skull, Swords, Volume2, VolumeX } from 'lucide-react';
 
 interface GameHUDProps {
   state: GameState | null;
