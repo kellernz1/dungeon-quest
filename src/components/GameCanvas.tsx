@@ -1,8 +1,9 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { initGameState, updateGame, applyLevelUpChoice } from '@/game/engine';
+import { initGameState, updateGame, applyLevelUpChoice, unlockSkill } from '@/game/engine';
 import { renderGame } from '@/game/renderer';
 import { audio } from '@/game/audio';
-import { GameState, HeroClass, RARITY_COLORS, EFFECT_COLORS, LevelUpStat } from '@/game/types';
+import { GameState, HeroClass, RARITY_COLORS, EFFECT_COLORS, LevelUpStat, HERO_CONFIGS } from '@/game/types';
+import { SKILL_TREES, SkillNode } from '@/game/skills';
 
 interface GameCanvasProps {
   heroClass: HeroClass;
