@@ -1072,8 +1072,10 @@ export function updateGame(state: GameState, dt: number): void {
     if (l.lifetime <= 0) { state.loot.splice(i, 1); continue; }
     if (dist(l.pos, p.pos) < 28) {
       if (l.type === 'gold') {
-        p.gold += l.value;
-        spawnDamageNumber(state, l.pos, l.value, '#f1c40f');
+        const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+        const gained = Math.floor(l.value * (1 + sb.goldMul));
+        p.gold += gained;
+        spawnDamageNumber(state, l.pos, gained, '#f1c40f');
         audio.play('pickup_gold');
       } else if (l.type === 'health') {
         p.hp = Math.min(p.maxHp, p.hp + l.value);
