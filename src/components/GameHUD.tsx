@@ -88,6 +88,16 @@ export default function GameHUD({ state }: GameHUDProps) {
             <span className="text-foreground font-medium">{state.enemies.length}</span>
           </div>
         </div>
+
+        {/* Mute toggle */}
+        <button
+          onClick={handleToggleMute}
+          aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+          title={muted ? 'Unmute (audio off)' : 'Mute (audio on)'}
+          className="shrink-0 w-8 h-8 rounded-md border border-border bg-secondary hover:bg-accent transition-colors flex items-center justify-center text-foreground"
+        >
+          {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* Bottom controls */}
