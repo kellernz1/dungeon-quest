@@ -483,9 +483,10 @@ function triggerLevelUp(state: GameState) {
   p.level++;
   p.xp -= p.xpToNext;
   p.xpToNext = Math.floor(p.xpToNext * 1.5);
+  p.skillPoints += 1;
   spawnParticles(state, p.pos, '#f1c40f', 30);
   spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 20 }, 0, '#f1c40f', false, 'LEVEL UP!');
-  notify(state, `Level ${p.level}! Choose an upgrade`, '#f1c40f');
+  notify(state, `Level ${p.level}! +1 skill point (press K)`, '#f1c40f');
   audio.play('level_up');
 
   // Show level up choices
@@ -496,14 +497,57 @@ function triggerLevelUp(state: GameState) {
 export function applyLevelUpChoice(state: GameState, choice: LevelUpStat) {
   const p = state.player;
   switch (choice) {
-    case 'hp': p.maxHp += 15; p.hp = p.maxHp; break;
-    case 'attack': p.attackDamage += 5; break;
-    case 'speed': p.speed += 20; p.baseSpeed += 20; break;
-    case 'mana': p.maxMana += 20; p.mana = p.maxMana; break;
+    case 'hp': p.baseMaxHp += 15; break;
+    case 'attack': p.baseAttackDamage += 5; break;
+    case 'speed': p.baseSpeed += 20; break;
+    case 'mana': p.baseMaxMana += 20; break;
   }
+  recomputeSkillBonuses(p);
+  // Top off pools on level up
+  if (choice === 'hp') p.hp = p.maxHp;
+  if (choice === 'mana') p.mana = p.maxMana;
   state.levelUpChoices = null;
   state.paused = false;
 }
+
+/**
+ * Recomputes all derived player stats from base values + unlocked skill bonuses.
+ * Preserves current HP/mana ratios so unlocking a +maxHP skill heals proportionally.
+ */
+export function recomputeSkillBonuses(p: Player): void {
+  const hpRatio = p.maxHp > 0 ? p.hp / p.maxHp : 1;
+  const manaRatio = p.maxMana > 0 ? p.mana / p.maxMana : 1;
+  const unlocked = new Set(p.unlockedSkills);
+  const b = aggregateBonuses(p.heroClass, unlocked);
+
+  p.maxHp = p.baseMaxHp + b.maxHp;
+  p.maxMana = p.baseMaxMana + b.maxMana;
+  p.attackDamage = p.baseAttackDamage + b.attackDamage;
+  p.speed = p.baseSpeed + b.speed;
+
+  p.hp = Math.min(p.maxHp, Math.max(1, Math.round(p.maxHp * hpRatio)));
+  p.mana = Math.min(p.maxMana, Math.round(p.maxMana * manaRatio));
+}
+
+/** Attempt to unlock a skill. Returns true on success. */
+export function unlockSkill(state: GameState, skillId: SkillId): boolean {
+  const p = state.player;
+  const unlocked = new Set(p.unlockedSkills);
+  const check = canUnlockSkill(p.heroClass, skillId, unlocked, p.skillPoints);
+  if (!check.ok) {
+    if (check.reason) notify(state, check.reason, '#e74c3c');
+    return false;
+  }
+  p.skillPoints -= 1;
+  p.unlockedSkills.push(skillId);
+  recomputeSkillBonuses(p);
+  const node = SKILL_TREES[p.heroClass].find(n => n.id === skillId);
+  notify(state, `Unlocked: ${node?.name ?? skillId}`, '#9b59b6');
+  audio.play('level_up');
+  spawnParticles(state, p.pos, '#9b59b6', 20);
+  return true;
+}
+
 
 // ════════════════════════════════════════
 // ── MAIN UPDATE
