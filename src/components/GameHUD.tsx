@@ -122,6 +122,10 @@ export default function GameHUD({ state }: GameHUDProps) {
           <span>
             <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">TAB</kbd> Inv ({p.inventory.length}/8)
           </span>
+          <span className={p.skillPoints > 0 ? 'text-xp font-semibold animate-pulse' : ''}>
+            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">K</kbd> Skills
+            {p.skillPoints > 0 && ` (${p.skillPoints}!)`}
+          </span>
         </div>
         <span className="capitalize">{room.theme} · {room.type} room</span>
       </div>
