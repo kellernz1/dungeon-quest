@@ -117,10 +117,17 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
 
     const handleMouseDown = (e: MouseEvent) => {
       audio.unlock();
-      if (e.button === 0) {
-        if (state.gameOver) { restart(); return; }
-        state.mouseDown = true;
+      if (e.button !== 0) return;
+      if (state.gameOver) { restart(); return; }
+
+      // Skill tree click — try unlocking the hovered node
+      if (state.showSkillTree) {
+        const hit = pickSkillNode(state.player.heroClass, state.mouse.x, state.mouse.y);
+        if (hit) unlockSkill(state, hit.id);
+        return; // don't trigger attack
       }
+
+      state.mouseDown = true;
     };
     const handleMouseUp = (e: MouseEvent) => {
       if (e.button === 0) state.mouseDown = false;
