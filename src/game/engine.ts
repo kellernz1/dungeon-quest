@@ -920,6 +920,7 @@ export function updateGame(state: GameState, dt: number): void {
           spawnParticles(state, p.pos, '#e74c3c', 6);
           spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
           state.screenShake = 0.12;
+          audio.play('player_hurt');
         }
       } else {
         if (Math.random() < 0.01) {
