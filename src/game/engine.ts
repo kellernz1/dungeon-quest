@@ -455,6 +455,7 @@ function transitionToRoom(state: GameState, targetRoomId: number, direction: Doo
   state.torches = [...room.torches];
   state.projectiles = [];
   state.loot = [];
+  audio.play('door');
 
   const p = state.player;
   if (direction === 'e') { p.pos.x = TILE * 2; p.pos.y = ROOM_H / 2; }
