@@ -609,6 +609,7 @@ export function updateGame(state: GameState, dt: number): void {
       chest.openTimer = 1.5;
       spawnParticles(state, chest.pos, RARITY_COLORS[chest.rarity], 15);
       state.screenShake = 0.05;
+      audio.play('chest_open');
       if (!chest.lootSpawned) {
         chest.lootSpawned = true;
         spawnChestLoot(state, chest, state.dungeon.tier);
