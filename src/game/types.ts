@@ -59,6 +59,13 @@ export interface Player extends Entity {
   dodgeTimer: number;
   dodgeCooldownTimer: number;
   baseSpeed: number;
+  /** Base values before skill bonuses (used to recompute when unlocking). */
+  baseMaxHp: number;
+  baseMaxMana: number;
+  baseAttackDamage: number;
+  /** Skill progression. */
+  skillPoints: number;
+  unlockedSkills: string[];
 }
 
 export interface StatusEffect {
@@ -222,6 +229,7 @@ export interface GameState {
   time: number;
   levelUpChoices: LevelUpStat[] | null;
   room: DungeonRoom;
+  showSkillTree: boolean;
 }
 
 export interface HeroConfig {

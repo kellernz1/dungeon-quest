@@ -4,6 +4,7 @@ import {
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
 } from './types';
 import { audio } from './audio';
+import { aggregateBonuses, canUnlockSkill, SKILL_TREES, SkillId } from './skills';
 
 const TILE = 32;
 const ROOM_W = 800;
@@ -364,6 +365,11 @@ function createPlayer(heroClass: HeroClass): Player {
     killCount: 0,
     dodgeTimer: 0,
     dodgeCooldownTimer: 0,
+    baseMaxHp: cfg.hp,
+    baseMaxMana: cfg.mana,
+    baseAttackDamage: cfg.damage,
+    skillPoints: 0,
+    unlockedSkills: [],
   };
 }
 
@@ -401,6 +407,7 @@ export function initGameState(heroClass: HeroClass): GameState {
     notification: null,
     time: 0,
     levelUpChoices: null,
+    showSkillTree: false,
   };
 }
 
@@ -476,9 +483,10 @@ function triggerLevelUp(state: GameState) {
   p.level++;
   p.xp -= p.xpToNext;
   p.xpToNext = Math.floor(p.xpToNext * 1.5);
+  p.skillPoints += 1;
   spawnParticles(state, p.pos, '#f1c40f', 30);
   spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 20 }, 0, '#f1c40f', false, 'LEVEL UP!');
-  notify(state, `Level ${p.level}! Choose an upgrade`, '#f1c40f');
+  notify(state, `Level ${p.level}! +1 skill point (press K)`, '#f1c40f');
   audio.play('level_up');
 
   // Show level up choices
@@ -489,14 +497,57 @@ function triggerLevelUp(state: GameState) {
 export function applyLevelUpChoice(state: GameState, choice: LevelUpStat) {
   const p = state.player;
   switch (choice) {
-    case 'hp': p.maxHp += 15; p.hp = p.maxHp; break;
-    case 'attack': p.attackDamage += 5; break;
-    case 'speed': p.speed += 20; p.baseSpeed += 20; break;
-    case 'mana': p.maxMana += 20; p.mana = p.maxMana; break;
+    case 'hp': p.baseMaxHp += 15; break;
+    case 'attack': p.baseAttackDamage += 5; break;
+    case 'speed': p.baseSpeed += 20; break;
+    case 'mana': p.baseMaxMana += 20; break;
   }
+  recomputeSkillBonuses(p);
+  // Top off pools on level up
+  if (choice === 'hp') p.hp = p.maxHp;
+  if (choice === 'mana') p.mana = p.maxMana;
   state.levelUpChoices = null;
   state.paused = false;
 }
+
+/**
+ * Recomputes all derived player stats from base values + unlocked skill bonuses.
+ * Preserves current HP/mana ratios so unlocking a +maxHP skill heals proportionally.
+ */
+export function recomputeSkillBonuses(p: Player): void {
+  const hpRatio = p.maxHp > 0 ? p.hp / p.maxHp : 1;
+  const manaRatio = p.maxMana > 0 ? p.mana / p.maxMana : 1;
+  const unlocked = new Set(p.unlockedSkills);
+  const b = aggregateBonuses(p.heroClass, unlocked);
+
+  p.maxHp = p.baseMaxHp + b.maxHp;
+  p.maxMana = p.baseMaxMana + b.maxMana;
+  p.attackDamage = p.baseAttackDamage + b.attackDamage;
+  p.speed = p.baseSpeed + b.speed;
+
+  p.hp = Math.min(p.maxHp, Math.max(1, Math.round(p.maxHp * hpRatio)));
+  p.mana = Math.min(p.maxMana, Math.round(p.maxMana * manaRatio));
+}
+
+/** Attempt to unlock a skill. Returns true on success. */
+export function unlockSkill(state: GameState, skillId: SkillId): boolean {
+  const p = state.player;
+  const unlocked = new Set(p.unlockedSkills);
+  const check = canUnlockSkill(p.heroClass, skillId, unlocked, p.skillPoints);
+  if (!check.ok) {
+    if (check.reason) notify(state, check.reason, '#e74c3c');
+    return false;
+  }
+  p.skillPoints -= 1;
+  p.unlockedSkills.push(skillId);
+  recomputeSkillBonuses(p);
+  const node = SKILL_TREES[p.heroClass].find(n => n.id === skillId);
+  notify(state, `Unlocked: ${node?.name ?? skillId}`, '#9b59b6');
+  audio.play('level_up');
+  spawnParticles(state, p.pos, '#9b59b6', 20);
+  return true;
+}
+
 
 // ════════════════════════════════════════
 // ── MAIN UPDATE
@@ -527,9 +578,10 @@ export function updateGame(state: GameState, dt: number): void {
   p.dodgeCooldownTimer -= dt;
 
   if (state.keys.has('shift') && p.dodgeCooldownTimer <= 0 && p.dodgeTimer <= 0 && (p.vel.x !== 0 || p.vel.y !== 0)) {
+    const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
     p.dodgeTimer = 0.25;
-    p.dodgeCooldownTimer = 0.8;
-    p.iFrames = 0.3;
+    p.dodgeCooldownTimer = 0.8 * (1 - sb.dodgeCooldownMul);
+    p.iFrames = 0.3 * (1 + sb.iFrameMul);
     spawnParticles(state, p.pos, '#aaa', 6);
     audio.play('dodge');
   }
@@ -628,14 +680,19 @@ export function updateGame(state: GameState, dt: number): void {
   updateStatusEffects(p, dt, state);
 
   // ── Player Attack ──
-  if (state.mouseDown && p.attackTimer <= 0 && !state.showInventory && !state.showShop && p.dodgeTimer <= 0) {
+  if (state.mouseDown && p.attackTimer <= 0 && !state.showInventory && !state.showShop && !state.showSkillTree && p.dodgeTimer <= 0) {
     const w = p.weapon;
-    p.attackTimer = w.attackSpeed;
+    const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+    p.attackTimer = w.attackSpeed * (1 - Math.min(0.7, sb.attackSpeedMul));
     p.isAttacking = true;
     p.attackAnimTimer = 0.15;
 
     const dir = normalize({ x: state.mouse.x - p.pos.x, y: state.mouse.y - p.pos.y });
     p.facing = dir;
+
+    const critChance = 0.15 + sb.critChance;
+    const critMul = 2 + sb.critDamage;
+    const procMul = 1 + sb.effectChanceMul;
 
     if (w.isRanged) {
       const speed = 400;
@@ -653,12 +710,14 @@ export function updateGame(state: GameState, dt: number): void {
       audio.play('attack_melee');
       const attackPos = { x: p.pos.x + dir.x * w.range, y: p.pos.y + dir.y * w.range };
       let didHit = false;
+      let totalDealt = 0;
       for (const e of state.enemies) {
         if (!e.alive) continue;
         if (dist(attackPos, e.pos) < w.range + e.width / 2) {
-          const isCrit = Math.random() < 0.15;
-          const dmg = Math.floor((isCrit ? 2 : 1) * (w.damage + p.attackDamage * 0.3));
+          const isCrit = Math.random() < critChance;
+          const dmg = Math.floor((isCrit ? critMul : 1) * (w.damage + p.attackDamage * 0.3));
           e.hp -= dmg;
+          totalDealt += dmg;
           e.flashTimer = 0.1;
           e.knockbackTimer = 0.15;
           const kb = normalize({ x: e.pos.x - p.pos.x, y: e.pos.y - p.pos.y });
@@ -668,7 +727,8 @@ export function updateGame(state: GameState, dt: number): void {
           state.screenShake = isCrit ? 0.15 : 0.08;
           didHit = true;
 
-          if (w.effect && w.effectChance && Math.random() < w.effectChance) {
+          const procChance = (w.effectChance ?? 0) * procMul;
+          if (w.effect && Math.random() < procChance) {
             if (w.effect === 'fire') applyStatusEffect(e, 'burn', 5);
             else if (w.effect === 'ice') applyStatusEffect(e, 'freeze', 0);
             else if (w.effect === 'poison') applyStatusEffect(e, 'poison', 4);
@@ -684,6 +744,12 @@ export function updateGame(state: GameState, dt: number): void {
         }
       }
       if (didHit) audio.play('hit');
+      // Life steal on melee hits
+      if (sb.lifeSteal > 0 && totalDealt > 0) {
+        const heal = Math.max(1, Math.floor(totalDealt * sb.lifeSteal));
+        p.hp = Math.min(p.maxHp, p.hp + heal);
+        spawnDamageNumber(state, { x: p.pos.x, y: p.pos.y - 8 }, heal, '#2ecc71');
+      }
       spawnParticles(state, attackPos, '#aaa', 3);
     }
   }
@@ -745,7 +811,14 @@ export function updateGame(state: GameState, dt: number): void {
   }
 
   // Mana regen
-  p.mana = Math.min(p.maxMana, p.mana + 5 * dt);
+  // Mana + HP regen with skill bonuses
+  {
+    const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+    p.mana = Math.min(p.maxMana, p.mana + (5 + sb.manaRegen) * dt);
+    if (sb.hpRegen > 0 && p.hp < p.maxHp) {
+      p.hp = Math.min(p.maxHp, p.hp + sb.hpRegen * dt);
+    }
+  }
 
   // ── Projectiles ──
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
@@ -942,7 +1015,8 @@ export function updateGame(state: GameState, dt: number): void {
       p.killCount++;
       spawnParticles(state, e.pos, '#e74c3c', 15);
       spawnLoot(state, e.pos, e.goldValue, state.dungeon.tier);
-      p.xp += e.xpValue;
+      const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+      p.xp += Math.floor(e.xpValue * (1 + sb.xpMul));
       audio.play('enemy_death');
 
       if (p.xp >= p.xpToNext) {
@@ -998,8 +1072,10 @@ export function updateGame(state: GameState, dt: number): void {
     if (l.lifetime <= 0) { state.loot.splice(i, 1); continue; }
     if (dist(l.pos, p.pos) < 28) {
       if (l.type === 'gold') {
-        p.gold += l.value;
-        spawnDamageNumber(state, l.pos, l.value, '#f1c40f');
+        const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+        const gained = Math.floor(l.value * (1 + sb.goldMul));
+        p.gold += gained;
+        spawnDamageNumber(state, l.pos, gained, '#f1c40f');
         audio.play('pickup_gold');
       } else if (l.type === 'health') {
         p.hp = Math.min(p.maxHp, p.hp + l.value);
