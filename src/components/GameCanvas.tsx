@@ -36,6 +36,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
     const state = stateRef.current;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      audio.unlock();
       const key = e.key.toLowerCase();
       state.keys.add(key);
       if (e.key === ' ' || e.key === 'Tab') e.preventDefault();
