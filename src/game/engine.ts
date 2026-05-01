@@ -943,6 +943,7 @@ export function updateGame(state: GameState, dt: number): void {
       spawnParticles(state, e.pos, '#e74c3c', 15);
       spawnLoot(state, e.pos, e.goldValue, state.dungeon.tier);
       p.xp += e.xpValue;
+      audio.play('enemy_death');
 
       if (p.xp >= p.xpToNext) {
         triggerLevelUp(state);
