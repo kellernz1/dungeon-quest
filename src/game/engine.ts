@@ -795,6 +795,7 @@ export function updateGame(state: GameState, dt: number): void {
         spawnParticles(state, p.pos, '#e74c3c', 6);
         spawnDamageNumber(state, p.pos, proj.damage, '#ff6b6b');
         state.screenShake = 0.12;
+        audio.play('player_hurt');
         state.projectiles.splice(i, 1);
       }
     }
