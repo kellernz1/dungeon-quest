@@ -648,8 +648,11 @@ export function updateGame(state: GameState, dt: number): void {
         effect: w.effect,
       });
       spawnParticles(state, p.pos, w.effect ? EFFECT_COLORS[w.effect] : '#ccc', 3);
+      audio.play('attack_ranged');
     } else {
+      audio.play('attack_melee');
       const attackPos = { x: p.pos.x + dir.x * w.range, y: p.pos.y + dir.y * w.range };
+      let didHit = false;
       for (const e of state.enemies) {
         if (!e.alive) continue;
         if (dist(attackPos, e.pos) < w.range + e.width / 2) {
@@ -663,6 +666,7 @@ export function updateGame(state: GameState, dt: number): void {
           spawnParticles(state, e.pos, '#e74c3c', 5);
           spawnDamageNumber(state, e.pos, dmg, isCrit ? '#f1c40f' : '#e74c3c', isCrit);
           state.screenShake = isCrit ? 0.15 : 0.08;
+          didHit = true;
 
           if (w.effect && w.effectChance && Math.random() < w.effectChance) {
             if (w.effect === 'fire') applyStatusEffect(e, 'burn', 5);
@@ -679,6 +683,7 @@ export function updateGame(state: GameState, dt: number): void {
           }
         }
       }
+      if (didHit) audio.play('hit');
       spawnParticles(state, attackPos, '#aaa', 3);
     }
   }
