@@ -229,6 +229,7 @@ export interface GameState {
   time: number;
   levelUpChoices: LevelUpStat[] | null;
   room: DungeonRoom;
+  showSkillTree: boolean;
 }
 
 export interface HeroConfig {
