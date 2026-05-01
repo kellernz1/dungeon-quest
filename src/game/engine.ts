@@ -692,6 +692,7 @@ export function updateGame(state: GameState, dt: number): void {
   if (state.keys.has(' ') && p.abilityTimer <= 0 && p.mana >= 20) {
     p.abilityTimer = p.abilityCooldown;
     p.mana -= 20;
+    audio.play('ability');
 
     if (p.heroClass === 'warrior') {
       for (const e of state.enemies) {
