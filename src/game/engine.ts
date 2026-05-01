@@ -1048,10 +1048,11 @@ export function updateGame(state: GameState, dt: number): void {
   if (state.screenShake < 0.01) state.screenShake = 0;
 
   // Player death
-  if (p.hp <= 0) {
+  if (p.hp <= 0 && p.alive) {
     p.alive = false;
     state.gameOver = true;
     spawnParticles(state, p.pos, '#e74c3c', 30);
+    audio.play('game_over');
   }
 
   // Clamp
