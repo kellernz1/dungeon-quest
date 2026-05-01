@@ -4,6 +4,7 @@ import {
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
 } from './types';
 import { audio } from './audio';
+import { aggregateBonuses, canUnlockSkill, SKILL_TREES, SkillId } from './skills';
 
 const TILE = 32;
 const ROOM_W = 800;
