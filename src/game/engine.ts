@@ -364,6 +364,11 @@ function createPlayer(heroClass: HeroClass): Player {
     killCount: 0,
     dodgeTimer: 0,
     dodgeCooldownTimer: 0,
+    baseMaxHp: cfg.hp,
+    baseMaxMana: cfg.mana,
+    baseAttackDamage: cfg.damage,
+    skillPoints: 0,
+    unlockedSkills: [],
   };
 }
 
