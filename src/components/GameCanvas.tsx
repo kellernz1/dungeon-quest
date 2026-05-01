@@ -105,6 +105,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      audio.unlock();
       if (e.button === 0) {
         if (state.gameOver) { restart(); return; }
         state.mouseDown = true;
