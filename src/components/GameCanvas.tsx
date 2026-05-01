@@ -336,3 +336,156 @@ function renderShopOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.textAlign = 'center';
   ctx.fillText('Press E to close · Press 1-3 to buy', 400, 460);
 }
+
+// ── Skill Tree layout helpers ──
+
+const NODE_R = 32;
+
+/** Computes the (x, y) center of each node for a class. */
+function skillNodeLayout(heroClass: HeroClass): { node: SkillNode; x: number; y: number }[] {
+  const tree = SKILL_TREES[heroClass];
+  // Group by tier, then by position within tier
+  const byTier: Record<number, SkillNode[]> = { 1: [], 2: [], 3: [] };
+  for (const n of tree) byTier[n.tier].push(n);
+
+  const cols = 2;
+  const colSpacing = 160;
+  const rowY = [200, 320, 440]; // tier 1, 2, 3
+  const startX = 400 - ((cols - 1) * colSpacing) / 2;
+
+  const out: { node: SkillNode; x: number; y: number }[] = [];
+  for (const tier of [1, 2, 3] as const) {
+    const nodes = byTier[tier];
+    nodes.forEach((n, i) => {
+      out.push({ node: n, x: startX + i * colSpacing, y: rowY[tier - 1] });
+    });
+  }
+  return out;
+}
+
+function pickSkillNode(heroClass: HeroClass, mx: number, my: number): SkillNode | null {
+  for (const { node, x, y } of skillNodeLayout(heroClass)) {
+    if ((mx - x) ** 2 + (my - y) ** 2 <= NODE_R * NODE_R) return node;
+  }
+  return null;
+}
+
+function renderSkillTreeOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
+  const p = state.player;
+  const cfg = HERO_CONFIGS[p.heroClass];
+  const layout = skillNodeLayout(p.heroClass);
+  const unlocked = new Set(p.unlockedSkills);
+
+  // Backdrop
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(40, 40, 720, 520);
+  ctx.strokeStyle = '#9b59b6';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(40, 40, 720, 520);
+
+  // Title
+  ctx.font = 'bold 24px Cinzel';
+  ctx.fillStyle = '#9b59b6';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${cfg.name.toUpperCase()} — SKILL TREE`, 400, 80);
+
+  ctx.font = '13px Inter';
+  ctx.fillStyle = '#f1c40f';
+  ctx.fillText(`Skill Points: ${p.skillPoints}`, 400, 105);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '11px Inter';
+  ctx.fillText('Click a node to unlock · Skills are permanent passive bonuses', 400, 125);
+
+  // Draw connection lines (prereqs)
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 2;
+  for (const { node, x, y } of layout) {
+    if (!node.requires) continue;
+    const parent = layout.find(l => l.node.id === node.requires);
+    if (!parent) continue;
+    const isLineUnlocked = unlocked.has(parent.node.id) && unlocked.has(node.id);
+    ctx.strokeStyle = isLineUnlocked ? '#9b59b6' : '#3a3a3a';
+    ctx.beginPath();
+    ctx.moveTo(parent.x, parent.y + NODE_R);
+    ctx.lineTo(x, y - NODE_R);
+    ctx.stroke();
+  }
+
+  // Hover detection
+  const hover = pickSkillNode(p.heroClass, state.mouse.x, state.mouse.y);
+
+  // Draw nodes
+  for (const { node, x, y } of layout) {
+    const isUnlocked = unlocked.has(node.id);
+    const prereqMet = !node.requires || unlocked.has(node.requires);
+    const canBuy = !isUnlocked && prereqMet && p.skillPoints > 0;
+    const isHover = hover?.id === node.id;
+
+    // Node background
+    ctx.beginPath();
+    ctx.arc(x, y, NODE_R, 0, Math.PI * 2);
+    if (isUnlocked) ctx.fillStyle = '#9b59b6';
+    else if (canBuy) ctx.fillStyle = isHover ? '#5a3a6e' : '#3a2a4e';
+    else ctx.fillStyle = '#2a2a2a';
+    ctx.fill();
+
+    ctx.lineWidth = isHover && canBuy ? 3 : 2;
+    ctx.strokeStyle = isUnlocked ? '#f1c40f' : canBuy ? '#9b59b6' : '#444';
+    ctx.stroke();
+
+    // Tier indicator
+    ctx.fillStyle = isUnlocked || canBuy ? '#f5f5f5' : '#666';
+    ctx.font = 'bold 11px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(`T${node.tier}`, x, y - 4);
+
+    // Skill name
+    ctx.font = 'bold 10px Inter';
+    ctx.fillText(node.name, x, y + 10);
+  }
+
+  // Tooltip box for hovered node
+  if (hover) {
+    const tipX = 60;
+    const tipY = 480;
+    const tipW = 680;
+    const tipH = 60;
+    ctx.fillStyle = 'rgba(20,20,30,0.95)';
+    ctx.fillRect(tipX, tipY, tipW, tipH);
+    ctx.strokeStyle = '#9b59b6';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(tipX, tipY, tipW, tipH);
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 14px Inter';
+    ctx.fillStyle = unlocked.has(hover.id) ? '#f1c40f' : '#e0d4ff';
+    ctx.fillText(hover.name, tipX + 12, tipY + 22);
+
+    ctx.font = '12px Inter';
+    ctx.fillStyle = '#bbb';
+    ctx.fillText(hover.description, tipX + 12, tipY + 42);
+
+    ctx.textAlign = 'right';
+    ctx.font = '11px Inter';
+    if (unlocked.has(hover.id)) {
+      ctx.fillStyle = '#2ecc71';
+      ctx.fillText('UNLOCKED', tipX + tipW - 12, tipY + 22);
+    } else if (hover.requires && !unlocked.has(hover.requires)) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillText('Locked: requires prereq', tipX + tipW - 12, tipY + 22);
+    } else if (p.skillPoints <= 0) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillText('Need skill points', tipX + tipW - 12, tipY + 22);
+    } else {
+      ctx.fillStyle = '#9b59b6';
+      ctx.fillText('Click to unlock (1 pt)', tipX + tipW - 12, tipY + 22);
+    }
+  }
+
+  ctx.font = '11px Inter';
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'center';
+  ctx.fillText('Press K to close', 400, 555);
+}
+
