@@ -811,7 +811,14 @@ export function updateGame(state: GameState, dt: number): void {
   }
 
   // Mana regen
-  p.mana = Math.min(p.maxMana, p.mana + 5 * dt);
+  // Mana + HP regen with skill bonuses
+  {
+    const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
+    p.mana = Math.min(p.maxMana, p.mana + (5 + sb.manaRegen) * dt);
+    if (sb.hpRegen > 0 && p.hp < p.maxHp) {
+      p.hp = Math.min(p.maxHp, p.hp + sb.hpRegen * dt);
+    }
+  }
 
   // ── Projectiles ──
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
