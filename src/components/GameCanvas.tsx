@@ -178,6 +178,16 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         renderSkillTreeOverlay(ctx, stateRef.current);
       }
 
+      // Always-on minimap (top-right corner) when no big overlay is open
+      if (!stateRef.current.showMap && !stateRef.current.showSkillTree && !stateRef.current.showInventory && !stateRef.current.showShop) {
+        renderMinimap(ctx, stateRef.current);
+      }
+
+      // Full dungeon map overlay
+      if (stateRef.current.showMap) {
+        renderMapOverlay(ctx, stateRef.current);
+      }
+
       // Throttle React state updates
       if (frameCount % 6 === 0) {
         onStateChange?.({ ...stateRef.current, player: { ...stateRef.current.player } });
