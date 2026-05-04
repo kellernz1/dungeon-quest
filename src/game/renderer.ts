@@ -1,6 +1,6 @@
 import {
   GameState, HERO_CONFIGS, RARITY_COLORS, EFFECT_COLORS,
-  EnemyType, Chest, Torch,
+  EnemyType, Enemy, Chest, Torch,
 } from './types';
 
 const ROOM_W = 800;
@@ -241,53 +241,29 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     ctx.ellipse(0, e.height / 2, e.width / 2, 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Subtle idle bob per-enemy
+    const bob = Math.sin(time * 4 + (e.pos.x + e.pos.y) * 0.05) * 1.2;
+    ctx.translate(0, bob);
+
     const baseColor = e.flashTimer > 0 ? '#fff' :
       e.statusEffects.some(s => s.type === 'freeze') ? '#74c0fc' :
       e.statusEffects.some(s => s.type === 'burn') ? '#ff7f50' :
       e.statusEffects.some(s => s.type === 'poison') ? '#98fb98' :
       enemyColor(e.type);
-    ctx.fillStyle = baseColor;
 
-    if (e.type === 'boss') {
-      ctx.beginPath(); ctx.arc(0, 0, e.width / 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = e.phase === 2 ? '#ff0000' : '#c0392b';
-      ctx.fillRect(-e.width / 2, -e.height / 2 - 8, 6, 10);
-      ctx.fillRect(e.width / 2 - 6, -e.height / 2 - 8, 6, 10);
-      if (e.phase === 2) {
-        ctx.globalAlpha = 0.2 + Math.sin(time * 5) * 0.1;
-        ctx.fillStyle = '#e74c3c';
-        ctx.beginPath(); ctx.arc(0, 0, e.width / 2 + 8, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    } else if (e.type === 'necromancer') {
-      ctx.beginPath(); ctx.arc(0, 0, e.width / 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#4a0080';
-      ctx.beginPath();
-      ctx.moveTo(0, -e.height / 2 - 10);
-      ctx.lineTo(-8, -e.height / 2 + 2);
-      ctx.lineTo(8, -e.height / 2 + 2);
-      ctx.closePath(); ctx.fill();
-    } else {
-      ctx.fillRect(-e.width / 2, -e.height / 2, e.width, e.height);
-    }
-
-    // Eyes
-    ctx.fillStyle = e.type === 'necromancer' ? '#b197fc' : '#c0392b';
-    ctx.fillRect(-4, -3, 3, 3);
-    ctx.fillRect(2, -3, 3, 3);
+    drawEnemySprite(ctx, e, baseColor, time);
 
     // HP bar
     if (e.hp < e.maxHp) {
       const barW = Math.max(e.width, 30);
       ctx.fillStyle = '#333';
-      ctx.fillRect(-barW / 2, -e.height / 2 - 8, barW, 4);
+      ctx.fillRect(-barW / 2, -e.height / 2 - 12, barW, 4);
       ctx.fillStyle = e.type === 'boss' ? '#ff4444' : '#e74c3c';
-      ctx.fillRect(-barW / 2, -e.height / 2 - 8, barW * (e.hp / e.maxHp), 4);
+      ctx.fillRect(-barW / 2, -e.height / 2 - 12, barW * (e.hp / e.maxHp), 4);
     }
 
     ctx.restore();
   }
-
   // ── Player ──
   if (p.alive) {
     ctx.save();
@@ -454,6 +430,153 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
   }
 
   ctx.restore();
+}
+
+function drawEnemySprite(ctx: CanvasRenderingContext2D, e: Enemy, baseColor: string, time: number) {
+  const w = e.width;
+  const h = e.height;
+  const facing = e.vel.x !== 0 ? Math.sign(e.vel.x) : 1;
+
+  ctx.fillStyle = baseColor;
+
+  if (e.type === 'goblin') {
+    // Crouched body + pointy ears
+    ctx.beginPath();
+    ctx.ellipse(0, 2, w / 2, h / 2 - 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Ears
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 + 2, -h / 4);
+    ctx.lineTo(-w / 2 - 4, -h / 2 - 2);
+    ctx.lineTo(-w / 2 + 4, -h / 4 - 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 2, -h / 4);
+    ctx.lineTo(w / 2 + 4, -h / 2 - 2);
+    ctx.lineTo(w / 2 - 4, -h / 4 - 2);
+    ctx.closePath();
+    ctx.fill();
+    // Tooth
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-1, 5, 2, 3);
+    // Eyes (yellow, menacing)
+    ctx.fillStyle = '#ffd43b';
+    ctx.fillRect(-5, -3, 3, 3);
+    ctx.fillRect(2, -3, 3, 3);
+  } else if (e.type === 'skeleton') {
+    // Bony frame: ribcage + skull
+    // Body
+    ctx.fillRect(-w / 2 + 2, -2, w - 4, h / 2);
+    // Ribs
+    ctx.strokeStyle = '#7a7a7a';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-w / 2 + 4, i * 3);
+      ctx.lineTo(w / 2 - 4, i * 3);
+      ctx.stroke();
+    }
+    // Skull
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.arc(0, -h / 4, w / 2 - 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Eye sockets
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-5, -h / 4 - 2, 3, 4);
+    ctx.fillRect(2, -h / 4 - 2, 3, 4);
+    // Jaw line
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-4, -h / 4 + 4, 8, 1);
+  } else if (e.type === 'orc') {
+    // Hulking brute: broad shoulders, tusks
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 - 2, -h / 4);
+    ctx.lineTo(w / 2 + 2, -h / 4);
+    ctx.lineTo(w / 2, h / 2);
+    ctx.lineTo(-w / 2, h / 2);
+    ctx.closePath();
+    ctx.fill();
+    // Head
+    ctx.fillRect(-w / 2 + 4, -h / 2, w - 8, h / 4);
+    // Tusks
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-4, -h / 2 + h / 4 - 2, 2, 4);
+    ctx.fillRect(2, -h / 2 + h / 4 - 2, 2, 4);
+    // Angry eyes
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(-5, -h / 2 + 4, 3, 3);
+    ctx.fillRect(2, -h / 2 + 4, 3, 3);
+  } else if (e.type === 'necromancer') {
+    // Robed figure: tall body + hood
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 - 2, h / 2);
+    ctx.lineTo(w / 2 + 2, h / 2);
+    ctx.lineTo(w / 2 - 2, -h / 4);
+    ctx.lineTo(-w / 2 + 2, -h / 4);
+    ctx.closePath();
+    ctx.fill();
+    // Hood
+    ctx.fillStyle = '#4a0080';
+    ctx.beginPath();
+    ctx.moveTo(0, -h / 2 - 6);
+    ctx.lineTo(-w / 2 - 2, -h / 4 + 2);
+    ctx.lineTo(w / 2 + 2, -h / 4 + 2);
+    ctx.closePath();
+    ctx.fill();
+    // Glowing eyes
+    ctx.fillStyle = '#b197fc';
+    ctx.shadowColor = '#b197fc';
+    ctx.shadowBlur = 6;
+    ctx.fillRect(-5, -h / 4 - 4, 3, 3);
+    ctx.fillRect(2, -h / 4 - 4, 3, 3);
+    ctx.shadowBlur = 0;
+  } else if (e.type === 'boss') {
+    // Big circular body
+    ctx.beginPath();
+    ctx.arc(0, 0, w / 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Horns
+    ctx.fillStyle = e.phase === 2 ? '#ff0000' : '#7a1f10';
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 + 4, -h / 2 + 2);
+    ctx.lineTo(-w / 2 - 6, -h / 2 - 10);
+    ctx.lineTo(-w / 2 + 10, -h / 2 - 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 4, -h / 2 + 2);
+    ctx.lineTo(w / 2 + 6, -h / 2 - 10);
+    ctx.lineTo(w / 2 - 10, -h / 2 - 2);
+    ctx.closePath();
+    ctx.fill();
+    // Mouth
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-8, 4, 16, 3);
+    // Glowing eyes
+    ctx.fillStyle = e.phase === 2 ? '#ff2222' : '#ffd43b';
+    ctx.shadowColor = ctx.fillStyle as string;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(-7, -4, 4, 4);
+    ctx.fillRect(3, -4, 4, 4);
+    ctx.shadowBlur = 0;
+    // Phase 2 aura
+    if (e.phase === 2) {
+      ctx.globalAlpha = 0.2 + Math.sin(time * 5) * 0.1;
+      ctx.fillStyle = '#e74c3c';
+      ctx.beginPath();
+      ctx.arc(0, 0, w / 2 + 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Direction tick — small forward-facing pip near eyes for non-boss
+  if (e.type !== 'boss' && e.type !== 'necromancer') {
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(facing * (w / 2 - 4), -h / 4, 2, 2);
+  }
 }
 
 function renderLighting(ctx: CanvasRenderingContext2D, state: GameState, time: number) {
