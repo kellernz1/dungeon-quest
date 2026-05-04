@@ -181,11 +181,6 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         renderSkillTreeOverlay(ctx, stateRef.current);
       }
 
-      // Always-on minimap (top-right corner) when no big overlay is open
-      if (!stateRef.current.showMap && !stateRef.current.showSkillTree && !stateRef.current.showInventory && !stateRef.current.showShop) {
-        renderMinimap(ctx, stateRef.current);
-      }
-
       // Full dungeon map overlay
       if (stateRef.current.showMap) {
         renderMapOverlay(ctx, stateRef.current);
@@ -545,31 +540,6 @@ function computeBounds(state: GameState): MapBounds {
     if (r.gridY > maxY) maxY = r.gridY;
   }
   return { minX, minY, maxX, maxY };
-}
-
-function renderMinimap(ctx: CanvasRenderingContext2D, state: GameState) {
-  const b = computeBounds(state);
-  const cellSize = 18;
-  const padding = 4;
-  const cols = b.maxX - b.minX + 1;
-  const rows = b.maxY - b.minY + 1;
-  const w = cols * cellSize + padding * 2;
-  const h = rows * cellSize + padding * 2 + 16;
-  const x = CANVAS_W - w - 8;
-  const y = 8;
-
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = '#444';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, w, h);
-
-  ctx.font = 'bold 9px Inter';
-  ctx.fillStyle = '#aaa';
-  ctx.textAlign = 'left';
-  ctx.fillText('MAP [M]', x + padding, y + 11);
-
-  drawMapCells(ctx, state, b, x + padding, y + padding + 14, cellSize, false);
 }
 
 function renderMapOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
