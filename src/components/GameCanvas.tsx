@@ -57,6 +57,18 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         if (state.showSkillTree) {
           state.showInventory = false;
           state.showShop = false;
+          state.showMap = false;
+        }
+        return;
+      }
+
+      // Toggle dungeon map (M)
+      if (key === 'm') {
+        state.showMap = !state.showMap;
+        if (state.showMap) {
+          state.showInventory = false;
+          state.showShop = false;
+          state.showSkillTree = false;
         }
         return;
       }
@@ -127,6 +139,9 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         return; // don't trigger attack
       }
 
+      // Don't shoot while map overlay is open
+      if (state.showMap) return;
+
       state.mouseDown = true;
     };
     const handleMouseUp = (e: MouseEvent) => {
@@ -164,6 +179,16 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
       // Draw skill tree overlay
       if (stateRef.current.showSkillTree) {
         renderSkillTreeOverlay(ctx, stateRef.current);
+      }
+
+      // Always-on minimap (top-right corner) when no big overlay is open
+      if (!stateRef.current.showMap && !stateRef.current.showSkillTree && !stateRef.current.showInventory && !stateRef.current.showShop) {
+        renderMinimap(ctx, stateRef.current);
+      }
+
+      // Full dungeon map overlay
+      if (stateRef.current.showMap) {
+        renderMapOverlay(ctx, stateRef.current);
       }
 
       // Throttle React state updates
@@ -487,5 +512,192 @@ function renderSkillTreeOverlay(ctx: CanvasRenderingContext2D, state: GameState)
   ctx.fillStyle = '#666';
   ctx.textAlign = 'center';
   ctx.fillText('Press K to close', 400, 555);
+}
+
+// ── Minimap & Dungeon Map ──
+
+const ROOM_TYPE_COLORS: Record<string, string> = {
+  start: '#7f8c8d',
+  combat: '#c0392b',
+  treasure: '#f1c40f',
+  shop: '#27ae60',
+  boss: '#9b59b6',
+};
+
+const ROOM_TYPE_GLYPHS: Record<string, string> = {
+  start: '◉',
+  combat: '⚔',
+  treasure: '$',
+  shop: '🛒',
+  boss: '☠',
+};
+
+interface MapBounds {
+  minX: number; minY: number; maxX: number; maxY: number;
+}
+
+function computeBounds(state: GameState): MapBounds {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const r of state.dungeon.rooms) {
+    if (r.gridX < minX) minX = r.gridX;
+    if (r.gridY < minY) minY = r.gridY;
+    if (r.gridX > maxX) maxX = r.gridX;
+    if (r.gridY > maxY) maxY = r.gridY;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function renderMinimap(ctx: CanvasRenderingContext2D, state: GameState) {
+  const b = computeBounds(state);
+  const cellSize = 18;
+  const padding = 4;
+  const cols = b.maxX - b.minX + 1;
+  const rows = b.maxY - b.minY + 1;
+  const w = cols * cellSize + padding * 2;
+  const h = rows * cellSize + padding * 2 + 16;
+  const x = CANVAS_W - w - 8;
+  const y = 8;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+
+  ctx.font = 'bold 9px Inter';
+  ctx.fillStyle = '#aaa';
+  ctx.textAlign = 'left';
+  ctx.fillText('MAP [M]', x + padding, y + 11);
+
+  drawMapCells(ctx, state, b, x + padding, y + padding + 14, cellSize, false);
+}
+
+function renderMapOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(0, 0, CANVAS_W, 600);
+
+  ctx.font = 'bold 24px Cinzel';
+  ctx.fillStyle = '#f1c40f';
+  ctx.textAlign = 'center';
+  ctx.fillText(`DUNGEON MAP — TIER ${state.dungeon.tier}`, 400, 60);
+
+  const b = computeBounds(state);
+  const cellSize = 64;
+  const cols = b.maxX - b.minX + 1;
+  const rows = b.maxY - b.minY + 1;
+  const totalW = cols * cellSize;
+  const totalH = rows * cellSize;
+  const startX = (CANVAS_W - totalW) / 2;
+  const startY = 100 + (380 - totalH) / 2;
+
+  drawMapCells(ctx, state, b, startX, startY, cellSize, true);
+
+  // Legend
+  const legendY = 510;
+  ctx.font = '11px Inter';
+  ctx.textAlign = 'left';
+  const entries: [string, string][] = [
+    ['start', 'Start'], ['combat', 'Combat'], ['treasure', 'Treasure'], ['shop', 'Shop'], ['boss', 'Boss'],
+  ];
+  let lx = 80;
+  for (const [type, label] of entries) {
+    ctx.fillStyle = ROOM_TYPE_COLORS[type];
+    ctx.fillRect(lx, legendY, 12, 12);
+    ctx.fillStyle = '#ccc';
+    ctx.fillText(label, lx + 18, legendY + 10);
+    lx += 90;
+  }
+
+  ctx.font = '11px Inter';
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'center';
+  ctx.fillText('Press M to close · Unexplored rooms shown as ?', 400, 555);
+}
+
+function drawMapCells(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  b: MapBounds,
+  ox: number,
+  oy: number,
+  cellSize: number,
+  large: boolean,
+) {
+  const rooms = state.dungeon.rooms;
+  const currentId = state.dungeon.currentRoomId;
+  const gap = Math.max(2, Math.floor(cellSize * 0.08));
+
+  // Connections (doors) — draw under cells
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = Math.max(1, cellSize * 0.06);
+  for (const r of rooms) {
+    if (!r.visited) continue;
+    for (const door of r.doors) {
+      const target = rooms[door.targetRoom];
+      if (!target.visited) continue;
+      const x1 = ox + (r.gridX - b.minX) * cellSize + cellSize / 2;
+      const y1 = oy + (r.gridY - b.minY) * cellSize + cellSize / 2;
+      const x2 = ox + (target.gridX - b.minX) * cellSize + cellSize / 2;
+      const y2 = oy + (target.gridY - b.minY) * cellSize + cellSize / 2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }
+
+  // Rooms
+  for (const r of rooms) {
+    const cx = ox + (r.gridX - b.minX) * cellSize + gap;
+    const cy = oy + (r.gridY - b.minY) * cellSize + gap;
+    const sz = cellSize - gap * 2;
+    const isCurrent = r.id === currentId;
+
+    // Adjacency to a visited room reveals existence (but not contents)
+    const adjacentToVisited = !r.visited && rooms.some(
+      o => o.visited && Math.abs(o.gridX - r.gridX) + Math.abs(o.gridY - r.gridY) === 1,
+    );
+    const knownExists = r.visited || adjacentToVisited;
+    if (!knownExists) continue;
+
+    if (r.visited) {
+      ctx.fillStyle = ROOM_TYPE_COLORS[r.type] + (r.cleared ? 'cc' : 'aa');
+    } else {
+      ctx.fillStyle = '#333';
+    }
+    ctx.fillRect(cx, cy, sz, sz);
+
+    ctx.strokeStyle = isCurrent ? '#fff' : '#222';
+    ctx.lineWidth = isCurrent ? Math.max(2, cellSize * 0.06) : 1;
+    ctx.strokeRect(cx, cy, sz, sz);
+
+    if (large) {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (r.visited) {
+        ctx.font = `bold ${Math.floor(sz * 0.4)}px Inter`;
+        ctx.fillStyle = '#fff';
+        ctx.fillText(ROOM_TYPE_GLYPHS[r.type] || '?', cx + sz / 2, cy + sz / 2);
+      } else {
+        ctx.font = `bold ${Math.floor(sz * 0.5)}px Inter`;
+        ctx.fillStyle = '#888';
+        ctx.fillText('?', cx + sz / 2, cy + sz / 2);
+      }
+      ctx.textBaseline = 'alphabetic';
+    } else if (isCurrent) {
+      // Pulse dot for current on minimap
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx + sz / 2, cy + sz / 2, Math.max(2, sz * 0.18), 0, Math.PI * 2);
+      ctx.fill();
+    } else if (!r.visited) {
+      ctx.fillStyle = '#888';
+      ctx.font = `bold ${Math.floor(sz * 0.7)}px Inter`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', cx + sz / 2, cy + sz / 2);
+      ctx.textBaseline = 'alphabetic';
+    }
+  }
 }
 
