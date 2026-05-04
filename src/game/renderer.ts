@@ -241,53 +241,29 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     ctx.ellipse(0, e.height / 2, e.width / 2, 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Subtle idle bob per-enemy
+    const bob = Math.sin(time * 4 + (e.pos.x + e.pos.y) * 0.05) * 1.2;
+    ctx.translate(0, bob);
+
     const baseColor = e.flashTimer > 0 ? '#fff' :
       e.statusEffects.some(s => s.type === 'freeze') ? '#74c0fc' :
       e.statusEffects.some(s => s.type === 'burn') ? '#ff7f50' :
       e.statusEffects.some(s => s.type === 'poison') ? '#98fb98' :
       enemyColor(e.type);
-    ctx.fillStyle = baseColor;
 
-    if (e.type === 'boss') {
-      ctx.beginPath(); ctx.arc(0, 0, e.width / 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = e.phase === 2 ? '#ff0000' : '#c0392b';
-      ctx.fillRect(-e.width / 2, -e.height / 2 - 8, 6, 10);
-      ctx.fillRect(e.width / 2 - 6, -e.height / 2 - 8, 6, 10);
-      if (e.phase === 2) {
-        ctx.globalAlpha = 0.2 + Math.sin(time * 5) * 0.1;
-        ctx.fillStyle = '#e74c3c';
-        ctx.beginPath(); ctx.arc(0, 0, e.width / 2 + 8, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    } else if (e.type === 'necromancer') {
-      ctx.beginPath(); ctx.arc(0, 0, e.width / 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#4a0080';
-      ctx.beginPath();
-      ctx.moveTo(0, -e.height / 2 - 10);
-      ctx.lineTo(-8, -e.height / 2 + 2);
-      ctx.lineTo(8, -e.height / 2 + 2);
-      ctx.closePath(); ctx.fill();
-    } else {
-      ctx.fillRect(-e.width / 2, -e.height / 2, e.width, e.height);
-    }
-
-    // Eyes
-    ctx.fillStyle = e.type === 'necromancer' ? '#b197fc' : '#c0392b';
-    ctx.fillRect(-4, -3, 3, 3);
-    ctx.fillRect(2, -3, 3, 3);
+    drawEnemySprite(ctx, e, baseColor, time);
 
     // HP bar
     if (e.hp < e.maxHp) {
       const barW = Math.max(e.width, 30);
       ctx.fillStyle = '#333';
-      ctx.fillRect(-barW / 2, -e.height / 2 - 8, barW, 4);
+      ctx.fillRect(-barW / 2, -e.height / 2 - 12, barW, 4);
       ctx.fillStyle = e.type === 'boss' ? '#ff4444' : '#e74c3c';
-      ctx.fillRect(-barW / 2, -e.height / 2 - 8, barW * (e.hp / e.maxHp), 4);
+      ctx.fillRect(-barW / 2, -e.height / 2 - 12, barW * (e.hp / e.maxHp), 4);
     }
 
     ctx.restore();
   }
-
   // ── Player ──
   if (p.alive) {
     ctx.save();
