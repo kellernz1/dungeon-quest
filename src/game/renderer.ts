@@ -1,6 +1,6 @@
 import {
   GameState, HERO_CONFIGS, RARITY_COLORS, EFFECT_COLORS,
-  EnemyType, Chest, Torch,
+  EnemyType, Enemy, Chest, Torch,
 } from './types';
 
 const ROOM_W = 800;
