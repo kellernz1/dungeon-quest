@@ -57,6 +57,18 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         if (state.showSkillTree) {
           state.showInventory = false;
           state.showShop = false;
+          state.showMap = false;
+        }
+        return;
+      }
+
+      // Toggle dungeon map (M)
+      if (key === 'm') {
+        state.showMap = !state.showMap;
+        if (state.showMap) {
+          state.showInventory = false;
+          state.showShop = false;
+          state.showSkillTree = false;
         }
         return;
       }
