@@ -139,6 +139,9 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         return; // don't trigger attack
       }
 
+      // Don't shoot while map overlay is open
+      if (state.showMap) return;
+
       state.mouseDown = true;
     };
     const handleMouseUp = (e: MouseEvent) => {
