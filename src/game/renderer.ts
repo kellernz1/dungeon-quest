@@ -548,16 +548,26 @@ function renderMinimap(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.fillRect(mm.x - 4, mm.y - 4, 138, 80);
 
   for (const room of state.dungeon.rooms) {
-    if (!room.visited) continue;
     const rx = mm.x + room.gridX * (mm.cellW + 3);
     const ry = mm.y + room.gridY * (mm.cellH + 3);
 
+    // Adjacency to a visited room reveals existence (but not contents)
+    const adjacentToVisited = !room.visited && state.dungeon.rooms.some(
+      o => o.visited && Math.abs(o.gridX - room.gridX) + Math.abs(o.gridY - room.gridY) === 1,
+    );
+    if (!room.visited && !adjacentToVisited) continue;
+
     const isCurrent = room.id === state.dungeon.currentRoomId;
-    const colors: Record<string, string> = {
-      start: '#555', combat: room.cleared ? '#2d5a2d' : '#5a2d2d',
-      treasure: '#5a5a2d', boss: '#5a1a1a', shop: '#2d4a5a',
-    };
-    ctx.fillStyle = colors[room.type] || '#444';
+
+    if (room.visited) {
+      const colors: Record<string, string> = {
+        start: '#555', combat: room.cleared ? '#2d5a2d' : '#5a2d2d',
+        treasure: '#5a5a2d', boss: '#5a1a1a', shop: '#2d4a5a',
+      };
+      ctx.fillStyle = colors[room.type] || '#444';
+    } else {
+      ctx.fillStyle = '#2a2a2a';
+    }
     ctx.fillRect(rx, ry, mm.cellW, mm.cellH);
 
     if (isCurrent) {
@@ -566,23 +576,30 @@ function renderMinimap(ctx: CanvasRenderingContext2D, state: GameState) {
       ctx.strokeRect(rx, ry, mm.cellW, mm.cellH);
     }
 
-    ctx.font = '8px Inter';
+    ctx.font = 'bold 9px Inter';
     ctx.fillStyle = '#ccc';
     ctx.textAlign = 'center';
-    const labels: Record<string, string> = { boss: '☠', treasure: '♦', shop: '$', start: '•' };
-    if (labels[room.type]) ctx.fillText(labels[room.type], rx + mm.cellW / 2, ry + mm.cellH / 2 + 3);
+    if (room.visited) {
+      const labels: Record<string, string> = { boss: '☠', treasure: '♦', shop: '$', start: '•' };
+      if (labels[room.type]) ctx.fillText(labels[room.type], rx + mm.cellW / 2, ry + mm.cellH / 2 + 3);
+    } else {
+      ctx.fillStyle = '#888';
+      ctx.fillText('?', rx + mm.cellW / 2, ry + mm.cellH / 2 + 3);
+    }
 
-    for (const door of room.doors) {
-      const target = state.dungeon.rooms[door.targetRoom];
-      if (!target.visited) continue;
-      ctx.strokeStyle = door.locked ? '#5a3a1a' : '#666';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(rx + mm.cellW / 2, ry + mm.cellH / 2);
-      const tx = mm.x + target.gridX * (mm.cellW + 3) + mm.cellW / 2;
-      const ty = mm.y + target.gridY * (mm.cellH + 3) + mm.cellH / 2;
-      ctx.lineTo(tx, ty);
-      ctx.stroke();
+    if (room.visited) {
+      for (const door of room.doors) {
+        const target = state.dungeon.rooms[door.targetRoom];
+        if (!target.visited) continue;
+        ctx.strokeStyle = door.locked ? '#5a3a1a' : '#666';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(rx + mm.cellW / 2, ry + mm.cellH / 2);
+        const tx = mm.x + target.gridX * (mm.cellW + 3) + mm.cellW / 2;
+        const ty = mm.y + target.gridY * (mm.cellH + 3) + mm.cellH / 2;
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+      }
     }
   }
 
