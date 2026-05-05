@@ -73,6 +73,18 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         return;
       }
 
+      // Quaff potions
+      if (key === 'q' && state.player.healthPotions > 0 && state.player.alive) {
+        state.player.healthPotions -= 1;
+        state.player.hp = Math.min(state.player.maxHp, state.player.hp + Math.floor(state.player.maxHp * 0.5));
+        audio.play('pickup_health');
+      }
+      if (key === 'f' && state.player.manaPotions > 0 && state.player.alive) {
+        state.player.manaPotions -= 1;
+        state.player.mana = Math.min(state.player.maxMana, state.player.mana + Math.floor(state.player.maxMana * 0.6));
+        audio.play('pickup_health');
+      }
+
       // Shop interaction
       if (key === 'e' && state.showShop) {
         state.showShop = false;
