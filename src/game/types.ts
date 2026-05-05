@@ -119,7 +119,7 @@ export interface Particle {
 
 export interface LootDrop {
   pos: Vector2;
-  type: 'gold' | 'health' | 'weapon' | 'mana';
+  type: 'gold' | 'health' | 'weapon' | 'mana' | 'health_potion' | 'mana_potion';
   value: number;
   rarity: WeaponRarity;
   lifetime: number;
