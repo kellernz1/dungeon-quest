@@ -291,25 +291,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
       ctx.fill();
     }
 
-    const cfg = HERO_CONFIGS[p.heroClass];
-    ctx.fillStyle = cfg.color;
-    ctx.beginPath();
-    ctx.arc(0, 0, p.width / 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.beginPath();
-    ctx.arc(-3, -3, p.width / 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Eyes
-    ctx.fillStyle = '#fff';
-    ctx.globalAlpha = 1;
-    const ex = p.facing.x * 3;
-    const ey = p.facing.y * 3;
-    ctx.fillRect(ex - 3, ey - 3, 3, 3);
-    ctx.fillRect(ex + 1, ey - 3, 3, 3);
-
+    drawHeroSprite(ctx, p, time);
     ctx.globalAlpha = 1;
 
     // Attack arc
