@@ -66,6 +66,8 @@ export interface Player extends Entity {
   /** Skill progression. */
   skillPoints: number;
   unlockedSkills: string[];
+  healthPotions: number;
+  manaPotions: number;
 }
 
 export interface StatusEffect {
