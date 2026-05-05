@@ -316,6 +316,19 @@ function spawnChestLoot(state: GameState, chest: Chest, tier: number) {
     pos: { x: pos.x + (Math.random() - 0.5) * 30, y: pos.y + 20 },
     type: 'health', value: 25 + tier * 10, rarity: 'common', lifetime: 30, bobOffset: Math.random() * Math.PI * 2,
   });
+  // Bonus potion drops scaling with chest rarity
+  if (chest.rarity !== 'common' && Math.random() < 0.7) {
+    state.loot.push({
+      pos: { x: pos.x - 14, y: pos.y + 18 },
+      type: 'health_potion', value: 1, rarity: chest.rarity, lifetime: 60, bobOffset: Math.random() * Math.PI * 2,
+    });
+  }
+  if (Math.random() < 0.4) {
+    state.loot.push({
+      pos: { x: pos.x + 14, y: pos.y + 18 },
+      type: 'mana_potion', value: 1, rarity: 'common', lifetime: 60, bobOffset: Math.random() * Math.PI * 2,
+    });
+  }
   // Weapon from non-common chests
   if (chest.rarity !== 'common' || Math.random() < 0.4) {
     const weapon = generateWeapon(chest.rarity);
