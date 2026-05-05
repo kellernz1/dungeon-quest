@@ -101,6 +101,7 @@ export default function GameHUD({ state }: GameHUDProps) {
             <span className="text-foreground font-medium">{p.manaPotions}</span>
             <kbd className="px-1 rounded bg-secondary border border-border font-mono text-[9px]">F</kbd>
           </div>
+        </div>
 
         {/* Mute toggle */}
         <button
