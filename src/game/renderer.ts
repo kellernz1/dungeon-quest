@@ -294,26 +294,6 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     drawHeroSprite(ctx, p, time);
     ctx.globalAlpha = 1;
 
-    // Attack arc
-    if (p.attackAnimTimer > 0) {
-      const wColor = p.weapon.effect ? EFFECT_COLORS[p.weapon.effect] : 'rgba(255,255,255,0.6)';
-      ctx.strokeStyle = wColor;
-      ctx.lineWidth = 2;
-      const angle = Math.atan2(p.facing.y, p.facing.x);
-      ctx.beginPath();
-      ctx.arc(0, 0, p.weapon.range, angle - 0.6, angle + 0.6);
-      ctx.stroke();
-    }
-
-    // Status effect indicators
-    if (p.statusEffects.length > 0) {
-      let ox = -p.statusEffects.length * 5;
-      for (const se of p.statusEffects) {
-        ctx.fillStyle = se.type === 'burn' ? '#e74c3c' : se.type === 'freeze' ? '#74c0fc' : '#51cf66';
-        ctx.fillRect(ox, -p.height / 2 - 10, 4, 4);
-        ox += 10;
-      }
-    }
 
     ctx.restore();
   }
