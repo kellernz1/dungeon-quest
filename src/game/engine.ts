@@ -1101,6 +1101,14 @@ export function updateGame(state: GameState, dt: number): void {
         p.mana = Math.min(p.maxMana, p.mana + l.value);
         spawnDamageNumber(state, l.pos, l.value, '#74c0fc');
         audio.play('pickup_health');
+      } else if (l.type === 'health_potion') {
+        p.healthPotions += 1;
+        notify(state, 'Health Potion (Q to use)', '#2ecc71');
+        audio.play('pickup_health');
+      } else if (l.type === 'mana_potion') {
+        p.manaPotions += 1;
+        notify(state, 'Mana Potion (F to use)', '#74c0fc');
+        audio.play('pickup_health');
       } else if (l.type === 'weapon' && l.weapon) {
         if (p.inventory.length < 8) {
           p.inventory.push(l.weapon);
