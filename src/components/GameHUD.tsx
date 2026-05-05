@@ -89,6 +89,19 @@ export default function GameHUD({ state }: GameHUDProps) {
           </div>
         </div>
 
+        {/* Potions */}
+        <div className="flex flex-col gap-1 text-[11px] shrink-0">
+          <div className="flex items-center gap-1" title="Q to use Health Potion">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-health" />
+            <span className="text-foreground font-medium">{p.healthPotions}</span>
+            <kbd className="px-1 rounded bg-secondary border border-border font-mono text-[9px]">Q</kbd>
+          </div>
+          <div className="flex items-center gap-1" title="F to use Mana Potion">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-mana" />
+            <span className="text-foreground font-medium">{p.manaPotions}</span>
+            <kbd className="px-1 rounded bg-secondary border border-border font-mono text-[9px]">F</kbd>
+          </div>
+
         {/* Mute toggle */}
         <button
           onClick={handleToggleMute}
