@@ -375,6 +375,21 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     ctx.fillText('DODGE', 12, ROOM_H - 22);
   }
 
+  // ── Ability indicator (Space) ──
+  if (p.alive) {
+    const ax = 80;
+    const ay = ROOM_H - 30;
+    const ready = p.abilityTimer <= 0 && p.mana >= 20;
+    const pct = p.abilityTimer > 0 ? 1 - p.abilityTimer / p.abilityCooldown : 1;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(ax, ay, 60, 10);
+    ctx.fillStyle = ready ? '#f1c40f' : '#9b59b6';
+    ctx.fillRect(ax, ay, 60 * pct, 10);
+    ctx.font = '8px Inter';
+    ctx.fillStyle = ready ? '#f1c40f' : '#999';
+    ctx.fillText(ready ? 'ABILITY ✓' : 'ABILITY', ax + 2, ay - 2);
+  }
+
   // ── Boss HP banner ──
   const boss = state.enemies.find(e => e.alive && e.type === 'boss');
   if (boss) {
