@@ -316,6 +316,19 @@ function spawnChestLoot(state: GameState, chest: Chest, tier: number) {
     pos: { x: pos.x + (Math.random() - 0.5) * 30, y: pos.y + 20 },
     type: 'health', value: 25 + tier * 10, rarity: 'common', lifetime: 30, bobOffset: Math.random() * Math.PI * 2,
   });
+  // Bonus potion drops scaling with chest rarity
+  if (chest.rarity !== 'common' && Math.random() < 0.7) {
+    state.loot.push({
+      pos: { x: pos.x - 14, y: pos.y + 18 },
+      type: 'health_potion', value: 1, rarity: chest.rarity, lifetime: 60, bobOffset: Math.random() * Math.PI * 2,
+    });
+  }
+  if (Math.random() < 0.4) {
+    state.loot.push({
+      pos: { x: pos.x + 14, y: pos.y + 18 },
+      type: 'mana_potion', value: 1, rarity: 'common', lifetime: 60, bobOffset: Math.random() * Math.PI * 2,
+    });
+  }
   // Weapon from non-common chests
   if (chest.rarity !== 'common' || Math.random() < 0.4) {
     const weapon = generateWeapon(chest.rarity);
@@ -370,6 +383,8 @@ function createPlayer(heroClass: HeroClass): Player {
     baseAttackDamage: cfg.damage,
     skillPoints: 0,
     unlockedSkills: [],
+    healthPotions: 2,
+    manaPotions: 1,
   };
 }
 
@@ -1085,6 +1100,14 @@ export function updateGame(state: GameState, dt: number): void {
       } else if (l.type === 'mana') {
         p.mana = Math.min(p.maxMana, p.mana + l.value);
         spawnDamageNumber(state, l.pos, l.value, '#74c0fc');
+        audio.play('pickup_health');
+      } else if (l.type === 'health_potion') {
+        p.healthPotions += 1;
+        notify(state, 'Health Potion (Q to use)', '#2ecc71');
+        audio.play('pickup_health');
+      } else if (l.type === 'mana_potion') {
+        p.manaPotions += 1;
+        notify(state, 'Mana Potion (F to use)', '#74c0fc');
         audio.play('pickup_health');
       } else if (l.type === 'weapon' && l.weapon) {
         if (p.inventory.length < 8) {

@@ -217,6 +217,26 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
       ctx.beginPath();
       ctx.moveTo(0, -6); ctx.lineTo(5, 4); ctx.lineTo(-5, 4);
       ctx.closePath(); ctx.fill();
+    } else if (l.type === 'health_potion' || l.type === 'mana_potion') {
+      const isHp = l.type === 'health_potion';
+      const fill = isHp ? '#e74c3c' : '#74c0fc';
+      ctx.shadowColor = fill;
+      ctx.shadowBlur = 10;
+      // Bottle body
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.ellipse(0, 1, 5, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Neck
+      ctx.fillStyle = '#3a2a1a';
+      ctx.fillRect(-2, -7, 4, 4);
+      // Cork
+      ctx.fillStyle = '#8b5a2b';
+      ctx.fillRect(-3, -9, 6, 2);
+      // Highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillRect(-3, -1, 1, 4);
+      ctx.shadowBlur = 0;
     } else if (l.type === 'weapon') {
       const rc = RARITY_COLORS[l.rarity];
       ctx.shadowColor = rc;
