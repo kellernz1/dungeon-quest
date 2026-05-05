@@ -370,6 +370,8 @@ function createPlayer(heroClass: HeroClass): Player {
     baseAttackDamage: cfg.damage,
     skillPoints: 0,
     unlockedSkills: [],
+    healthPotions: 2,
+    manaPotions: 1,
   };
 }
 
