@@ -414,6 +414,152 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
   ctx.restore();
 }
 
+function drawHeroSprite(ctx: CanvasRenderingContext2D, p: Player, time: number) {
+  const cfg = HERO_CONFIGS[p.heroClass];
+  const r = p.width / 2;
+  const facingAngle = Math.atan2(p.facing.y, p.facing.x);
+  const swing = p.attackAnimTimer > 0 ? Math.sin((1 - p.attackAnimTimer / 0.2) * Math.PI) : 0;
+  const bob = Math.sin(time * 5) * 0.8;
+
+  ctx.save();
+  ctx.translate(0, bob);
+
+  // Class-specific body & accessory
+  if (p.heroClass === 'warrior') {
+    // Armored body
+    ctx.fillStyle = '#5c6770';
+    ctx.fillRect(-r, -r * 0.6, r * 2, r * 1.4);
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath(); ctx.arc(0, -r * 0.4, r * 0.85, 0, Math.PI * 2); ctx.fill();
+    // Helmet visor
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(-r * 0.6, -r * 0.55, r * 1.2, 3);
+    // Shoulder pauldrons
+    ctx.fillStyle = '#34495e';
+    ctx.beginPath(); ctx.arc(-r, 0, r * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r, 0, r * 0.5, 0, Math.PI * 2); ctx.fill();
+    // Sword (rotates with facing, swings on attack)
+    ctx.save();
+    ctx.rotate(facingAngle + swing * 1.4 - 0.3);
+    ctx.fillStyle = '#bdc3c7';
+    ctx.fillRect(r * 0.5, -2, r * 1.6, 4);
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillRect(r * 0.4, -5, 4, 10);
+    ctx.restore();
+  } else if (p.heroClass === 'archer') {
+    // Slim body, hood
+    ctx.fillStyle = '#27632a';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.8, r); ctx.lineTo(0, -r * 0.2); ctx.lineTo(r * 0.8, r);
+    ctx.closePath(); ctx.fill();
+    // Head
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath(); ctx.arc(0, -r * 0.3, r * 0.75, 0, Math.PI * 2); ctx.fill();
+    // Hood
+    ctx.fillStyle = '#1e4620';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.3, r * 0.85, Math.PI, Math.PI * 2);
+    ctx.closePath(); ctx.fill();
+    // Bow
+    ctx.save();
+    ctx.rotate(facingAngle);
+    ctx.strokeStyle = '#8b5a2b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(r * 0.3, 0, r * 0.9, -1.1, 1.1);
+    ctx.stroke();
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.3 + Math.cos(-1.1) * r * 0.9, Math.sin(-1.1) * r * 0.9);
+    ctx.lineTo(r * 0.3 + Math.cos(1.1) * r * 0.9, Math.sin(1.1) * r * 0.9);
+    ctx.stroke();
+    ctx.restore();
+  } else if (p.heroClass === 'mage') {
+    // Robed body (triangle)
+    ctx.fillStyle = '#4a3b8a';
+    ctx.beginPath();
+    ctx.moveTo(-r, r); ctx.lineTo(0, -r * 0.3); ctx.lineTo(r, r);
+    ctx.closePath(); ctx.fill();
+    // Trim
+    ctx.fillStyle = cfg.color;
+    ctx.fillRect(-r, r - 3, r * 2, 3);
+    // Head
+    ctx.fillStyle = '#e0c099';
+    ctx.beginPath(); ctx.arc(0, -r * 0.4, r * 0.55, 0, Math.PI * 2); ctx.fill();
+    // Pointy hat
+    ctx.fillStyle = '#3a2b6a';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.6, -r * 0.4);
+    ctx.lineTo(r * 0.6, -r * 0.4);
+    ctx.lineTo(r * 0.1, -r * 1.6 + Math.sin(time * 2) * 1);
+    ctx.closePath(); ctx.fill();
+    // Star on hat
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(-r * 0.1, -r * 0.7, 3, 3);
+    // Staff with glowing orb
+    ctx.save();
+    ctx.rotate(facingAngle + swing * 0.8);
+    ctx.strokeStyle = '#5d4037';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r * 1.4, 0); ctx.stroke();
+    const glow = 0.7 + Math.sin(time * 3) * 0.3;
+    ctx.shadowColor = cfg.color;
+    ctx.shadowBlur = 10 * glow;
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath(); ctx.arc(r * 1.5, 0, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  } else {
+    // Rogue — sleek dark body, twin daggers
+    ctx.fillStyle = '#1a1a2a';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath(); ctx.arc(0, -r * 0.3, r * 0.75, 0, Math.PI * 2); ctx.fill();
+    // Mask band
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(-r * 0.7, -r * 0.4, r * 1.4, 4);
+    // Twin daggers
+    ctx.save();
+    ctx.rotate(facingAngle);
+    ctx.fillStyle = '#c0c0c0';
+    ctx.fillRect(r * 0.4 + swing * 6, -r * 0.5, r * 0.7, 3);
+    ctx.fillRect(r * 0.4 + swing * 6, r * 0.5 - 3, r * 0.7, 3);
+    ctx.restore();
+  }
+
+  // Eyes (skip for mage – face is more visible)
+  if (p.heroClass !== 'mage') {
+    ctx.fillStyle = '#fff';
+    const ex = p.facing.x * 2;
+    const ey = p.facing.y * 2 - r * 0.35;
+    ctx.fillRect(ex - 4, ey, 2, 2);
+    ctx.fillRect(ex + 2, ey, 2, 2);
+  }
+
+  // Status indicators
+  if (p.statusEffects.length > 0) {
+    let ox = -p.statusEffects.length * 5;
+    for (const se of p.statusEffects) {
+      ctx.fillStyle = se.type === 'burn' ? '#e74c3c' : se.type === 'freeze' ? '#74c0fc' : '#51cf66';
+      ctx.fillRect(ox, -p.height / 2 - 10, 4, 4);
+      ox += 10;
+    }
+  }
+
+  ctx.restore();
+
+  // Attack arc (kept, drawn on top)
+  if (p.attackAnimTimer > 0) {
+    const wColor = p.weapon.effect ? EFFECT_COLORS[p.weapon.effect] : 'rgba(255,255,255,0.6)';
+    ctx.strokeStyle = wColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.weapon.range, facingAngle - 0.6, facingAngle + 0.6);
+    ctx.stroke();
+  }
+}
+
 function drawEnemySprite(ctx: CanvasRenderingContext2D, e: Enemy, baseColor: string, time: number) {
   const w = e.width;
   const h = e.height;
