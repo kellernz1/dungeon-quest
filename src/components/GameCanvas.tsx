@@ -62,6 +62,14 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         return;
       }
 
+      // Toggle pause (P or Escape)
+      if (key === 'p' || e.key === 'Escape') {
+        if (!state.gameOver && !state.levelUpChoices) {
+          state.paused = !state.paused;
+        }
+        return;
+      }
+
       // Toggle dungeon map (M)
       if (key === 'm') {
         state.showMap = !state.showMap;
@@ -198,6 +206,11 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         renderMapOverlay(ctx, stateRef.current);
       }
 
+      // Pause overlay (drawn last so it sits on top)
+      if (stateRef.current.paused && !stateRef.current.gameOver) {
+        renderPauseOverlay(ctx);
+      }
+
       // Throttle React state updates
       if (frameCount % 6 === 0) {
         onStateChange?.({ ...stateRef.current, player: { ...stateRef.current.player } });
@@ -228,6 +241,20 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
       tabIndex={0}
     />
   );
+}
+
+function renderPauseOverlay(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  ctx.font = 'bold 48px Cinzel';
+  ctx.fillStyle = '#f1c40f';
+  ctx.textAlign = 'center';
+  ctx.fillText('PAUSED', CANVAS_W / 2, CANVAS_H / 2 - 10);
+
+  ctx.font = '14px Inter';
+  ctx.fillStyle = '#ccc';
+  ctx.fillText('Press P or ESC to resume', CANVAS_W / 2, CANVAS_H / 2 + 24);
 }
 
 function renderInventoryOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
