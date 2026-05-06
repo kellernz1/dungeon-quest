@@ -442,12 +442,12 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     ctx.fillRect(0, 0, ROOM_W, ROOM_H);
 
     // Panel
-    const panelW = 460, panelH = 280;
+    const panelW = 460, panelH = 320;
     const px = (ROOM_W - panelW) / 2;
     const py = (ROOM_H - panelH) / 2;
     ctx.fillStyle = 'rgba(20,10,12,0.95)';
     ctx.fillRect(px, py, panelW, panelH);
-    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeStyle = state.runResult?.isNewBest ? '#f1c40f' : '#e74c3c';
     ctx.lineWidth = 2;
     ctx.strokeRect(px, py, panelW, panelH);
 
@@ -483,6 +483,32 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
       ctx.fillStyle = '#f1c40f';
       ctx.fillText(val, px + panelW - 60, ry);
       ry += 22;
+    }
+
+    // Score + best
+    if (state.runResult) {
+      ry += 6;
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 15px Inter';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('Score', px + 60, ry);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = state.runResult.isNewBest ? '#f1c40f' : '#fff';
+      ctx.fillText(`${state.runResult.score}`, px + panelW - 60, ry);
+
+      ctx.font = '11px Inter';
+      ctx.textAlign = 'center';
+      if (state.runResult.isNewBest) {
+        ctx.fillStyle = '#f1c40f';
+        const prev = state.runResult.previousBest;
+        ctx.fillText(
+          prev != null ? `★ NEW BEST! (previous ${prev})` : '★ FIRST RUN — NEW BEST!',
+          ROOM_W / 2, ry + 18,
+        );
+      } else if (state.runResult.previousBest != null) {
+        ctx.fillStyle = '#888';
+        ctx.fillText(`Best: ${state.runResult.previousBest}`, ROOM_W / 2, ry + 18);
+      }
     }
 
     ctx.font = 'bold 14px Inter';

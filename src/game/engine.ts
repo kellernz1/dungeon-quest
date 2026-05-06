@@ -5,6 +5,7 @@ import {
 } from './types';
 import { audio } from './audio';
 import { aggregateBonuses, canUnlockSkill, SKILL_TREES, SkillId } from './skills';
+import { recordRun } from './highscore';
 
 const TILE = 32;
 const ROOM_W = 800;
@@ -425,6 +426,7 @@ export function initGameState(heroClass: HeroClass): GameState {
     showSkillTree: false,
     showMap: false,
     showHelp: false,
+    runResult: null,
   };
 }
 
@@ -1154,6 +1156,21 @@ export function updateGame(state: GameState, dt: number): void {
     state.gameOver = true;
     spawnParticles(state, p.pos, '#e74c3c', 30);
     audio.play('game_over');
+
+    const result = recordRun({
+      heroClass: p.heroClass,
+      level: p.level,
+      tier: state.dungeon.tier,
+      roomsCleared: state.roomsCleared,
+      kills: p.killCount,
+      gold: p.gold,
+      timeSec: Math.floor(state.time),
+    });
+    state.runResult = {
+      score: result.entry.score,
+      isNewBest: result.isNewBest,
+      previousBest: result.previousBest?.score ?? null,
+    };
   }
 
   // Clamp

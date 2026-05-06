@@ -234,6 +234,11 @@ export interface GameState {
   showSkillTree: boolean;
   showMap: boolean;
   showHelp: boolean;
+  runResult: {
+    score: number;
+    isNewBest: boolean;
+    previousBest: number | null;
+  } | null;
 }
 
 export interface HeroConfig {
