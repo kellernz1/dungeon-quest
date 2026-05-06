@@ -206,6 +206,11 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         renderMapOverlay(ctx, stateRef.current);
       }
 
+      // Pause overlay (drawn last so it sits on top)
+      if (stateRef.current.paused && !stateRef.current.gameOver) {
+        renderPauseOverlay(ctx);
+      }
+
       // Throttle React state updates
       if (frameCount % 6 === 0) {
         onStateChange?.({ ...stateRef.current, player: { ...stateRef.current.player } });
