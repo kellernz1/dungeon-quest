@@ -425,6 +425,7 @@ export function initGameState(heroClass: HeroClass): GameState {
     showSkillTree: false,
     showMap: false,
     showHelp: false,
+    runResult: null,
   };
 }
 
