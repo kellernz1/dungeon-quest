@@ -5,6 +5,7 @@ import {
 } from './types';
 import { audio } from './audio';
 import { aggregateBonuses, canUnlockSkill, SKILL_TREES, SkillId } from './skills';
+import { recordRun } from './highscore';
 
 const TILE = 32;
 const ROOM_W = 800;
