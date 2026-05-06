@@ -77,6 +77,19 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
           state.showInventory = false;
           state.showShop = false;
           state.showSkillTree = false;
+          state.showHelp = false;
+        }
+        return;
+      }
+
+      // Toggle help (H or ?)
+      if (key === 'h' || key === '?') {
+        state.showHelp = !state.showHelp;
+        if (state.showHelp) {
+          state.showInventory = false;
+          state.showShop = false;
+          state.showSkillTree = false;
+          state.showMap = false;
         }
         return;
       }
@@ -206,6 +219,11 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         renderMapOverlay(ctx, stateRef.current);
       }
 
+      // Help overlay
+      if (stateRef.current.showHelp) {
+        renderHelpOverlay(ctx);
+      }
+
       // Pause overlay (drawn last so it sits on top)
       if (stateRef.current.paused && !stateRef.current.gameOver) {
         renderPauseOverlay(ctx);
@@ -255,6 +273,80 @@ function renderPauseOverlay(ctx: CanvasRenderingContext2D) {
   ctx.font = '14px Inter';
   ctx.fillStyle = '#ccc';
   ctx.fillText('Press P or ESC to resume', CANVAS_W / 2, CANVAS_H / 2 + 24);
+}
+
+function renderHelpOverlay(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = 'rgba(0,0,0,0.88)';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  const px = 100, py = 60, pw = 600, ph = 480;
+  ctx.fillStyle = 'rgba(20,15,30,0.95)';
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = '#9b59b6';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px, py, pw, ph);
+
+  ctx.font = 'bold 26px Cinzel';
+  ctx.fillStyle = '#f1c40f';
+  ctx.textAlign = 'center';
+  ctx.fillText('CONTROLS', CANVAS_W / 2, py + 44);
+
+  const sections: { title: string; rows: [string, string][] }[] = [
+    {
+      title: 'Movement & Combat',
+      rows: [
+        ['WASD / Arrows', 'Move'],
+        ['Mouse', 'Aim'],
+        ['Left Click', 'Attack'],
+        ['Space', 'Dodge roll'],
+        ['Shift', 'Class ability'],
+      ],
+    },
+    {
+      title: 'Items & Menus',
+      rows: [
+        ['Q', 'Health potion'],
+        ['F', 'Mana potion'],
+        ['Tab', 'Inventory'],
+        ['1-8', 'Equip weapon (in inventory)'],
+        ['X', 'Drop last weapon'],
+        ['E', 'Open/close shop'],
+      ],
+    },
+    {
+      title: 'World & System',
+      rows: [
+        ['M', 'Dungeon map'],
+        ['K', 'Skill tree'],
+        ['H / ?', 'This help'],
+        ['P / ESC', 'Pause'],
+        ['1-4', 'Choose level-up bonus'],
+      ],
+    },
+  ];
+
+  let cy = py + 80;
+  ctx.textAlign = 'left';
+  for (const s of sections) {
+    ctx.font = 'bold 13px Cinzel';
+    ctx.fillStyle = '#9b59b6';
+    ctx.fillText(s.title.toUpperCase(), px + 30, cy);
+    cy += 18;
+    ctx.font = '12px Inter';
+    for (const [k, v] of s.rows) {
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillText(k, px + 50, cy);
+      ctx.fillStyle = '#ccc';
+      ctx.fillText(v, px + 200, cy);
+      cy += 16;
+    }
+    cy += 6;
+  }
+
+  ctx.font = '11px Inter';
+  ctx.fillStyle = '#888';
+  ctx.textAlign = 'center';
+  ctx.fillText('Press H to close', CANVAS_W / 2, py + ph - 16);
 }
 
 function renderInventoryOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
