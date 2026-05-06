@@ -1155,6 +1155,21 @@ export function updateGame(state: GameState, dt: number): void {
     state.gameOver = true;
     spawnParticles(state, p.pos, '#e74c3c', 30);
     audio.play('game_over');
+
+    const result = recordRun({
+      heroClass: p.heroClass,
+      level: p.level,
+      tier: state.dungeon.tier,
+      roomsCleared: state.roomsCleared,
+      kills: p.killCount,
+      gold: p.gold,
+      timeSec: Math.floor(state.time),
+    });
+    state.runResult = {
+      score: result.entry.score,
+      isNewBest: result.isNewBest,
+      previousBest: result.previousBest?.score ?? null,
+    };
   }
 
   // Clamp
