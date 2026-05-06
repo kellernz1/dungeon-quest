@@ -219,6 +219,11 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         renderMapOverlay(ctx, stateRef.current);
       }
 
+      // Help overlay
+      if (stateRef.current.showHelp) {
+        renderHelpOverlay(ctx);
+      }
+
       // Pause overlay (drawn last so it sits on top)
       if (stateRef.current.paused && !stateRef.current.gameOver) {
         renderPauseOverlay(ctx);
