@@ -438,18 +438,57 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
 
   // ── Game Over ──
   if (state.gameOver) {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillStyle = 'rgba(0,0,0,0.78)';
     ctx.fillRect(0, 0, ROOM_W, ROOM_H);
-    ctx.font = 'bold 36px Cinzel';
+
+    // Panel
+    const panelW = 460, panelH = 280;
+    const px = (ROOM_W - panelW) / 2;
+    const py = (ROOM_H - panelH) / 2;
+    ctx.fillStyle = 'rgba(20,10,12,0.95)';
+    ctx.fillRect(px, py, panelW, panelH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px, py, panelW, panelH);
+
+    ctx.font = 'bold 40px Cinzel';
     ctx.fillStyle = '#e74c3c';
     ctx.textAlign = 'center';
-    ctx.fillText('DEFEATED', ROOM_W / 2, ROOM_H / 2 - 40);
-    ctx.font = '16px Inter';
-    ctx.fillStyle = '#bdc3c7';
-    ctx.fillText(`Tier ${state.dungeon.tier} · ${state.roomsCleared} rooms · ${p.killCount} kills · ${p.gold} gold`, ROOM_W / 2, ROOM_H / 2);
-    ctx.fillText(`Level ${p.level} ${HERO_CONFIGS[p.heroClass].name}`, ROOM_W / 2, ROOM_H / 2 + 25);
+    ctx.fillText('DEFEATED', ROOM_W / 2, py + 60);
+
+    ctx.font = '13px Inter';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`Level ${p.level} ${HERO_CONFIGS[p.heroClass].name}`, ROOM_W / 2, py + 84);
+
+    // Stat rows
+    const totalSec = Math.floor(state.time);
+    const mm = Math.floor(totalSec / 60);
+    const ss = (totalSec % 60).toString().padStart(2, '0');
+    const rows: [string, string][] = [
+      ['Run Time', `${mm}:${ss}`],
+      ['Dungeon Tier', `${state.dungeon.tier}`],
+      ['Rooms Cleared', `${state.roomsCleared}`],
+      ['Enemies Slain', `${p.killCount}`],
+      ['Gold Collected', `${p.gold}`],
+      ['Skills Unlocked', `${p.unlockedSkills.length}`],
+    ];
+
+    ctx.font = '14px Inter';
+    let ry = py + 120;
+    for (const [label, val] of rows) {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#bdc3c7';
+      ctx.fillText(label, px + 60, ry);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillText(val, px + panelW - 60, ry);
+      ry += 22;
+    }
+
+    ctx.font = 'bold 14px Inter';
     ctx.fillStyle = '#f1c40f';
-    ctx.fillText('Click to restart', ROOM_W / 2, ROOM_H / 2 + 60);
+    ctx.textAlign = 'center';
+    ctx.fillText('Click to restart', ROOM_W / 2, py + panelH - 18);
   }
 
   ctx.restore();
