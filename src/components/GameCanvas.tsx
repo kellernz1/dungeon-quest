@@ -62,6 +62,14 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
         return;
       }
 
+      // Toggle pause (P or Escape)
+      if (key === 'p' || e.key === 'Escape') {
+        if (!state.gameOver && !state.levelUpChoices) {
+          state.paused = !state.paused;
+        }
+        return;
+      }
+
       // Toggle dungeon map (M)
       if (key === 'm') {
         state.showMap = !state.showMap;
