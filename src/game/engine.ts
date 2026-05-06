@@ -424,6 +424,7 @@ export function initGameState(heroClass: HeroClass): GameState {
     levelUpChoices: null,
     showSkillTree: false,
     showMap: false,
+    showHelp: false,
   };
 }
 
