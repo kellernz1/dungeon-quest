@@ -77,6 +77,19 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
           state.showInventory = false;
           state.showShop = false;
           state.showSkillTree = false;
+          state.showHelp = false;
+        }
+        return;
+      }
+
+      // Toggle help (H or ?)
+      if (key === 'h' || key === '?') {
+        state.showHelp = !state.showHelp;
+        if (state.showHelp) {
+          state.showInventory = false;
+          state.showShop = false;
+          state.showSkillTree = false;
+          state.showMap = false;
         }
         return;
       }
