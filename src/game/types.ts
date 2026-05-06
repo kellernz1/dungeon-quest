@@ -233,6 +233,7 @@ export interface GameState {
   room: DungeonRoom;
   showSkillTree: boolean;
   showMap: boolean;
+  showHelp: boolean;
 }
 
 export interface HeroConfig {
