@@ -413,27 +413,31 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
   // ── Boss HP banner ──
   const boss = state.enemies.find(e => e.alive && e.type === 'boss');
   if (boss) {
+    const bdef = boss.bossKind ? BOSS_DEFS[boss.bossKind] : null;
+    const baseColor = bdef ? bdef.color : '#9b59b6';
+    const glowColor = bdef ? bdef.glow : '#d465ff';
     const bw = 500;
     const bh = 18;
     const bx = (ROOM_W - bw) / 2;
     const by = 14;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(bx - 6, by - 6, bw + 12, bh + 26);
-    ctx.strokeStyle = boss.phase === 2 ? '#ff4444' : '#9b59b6';
+    ctx.strokeStyle = boss.phase === 2 ? '#ff4444' : baseColor;
     ctx.lineWidth = 2;
     ctx.strokeRect(bx - 6, by - 6, bw + 12, bh + 26);
     ctx.fillStyle = '#1a0a14';
     ctx.fillRect(bx, by, bw, bh);
     const pct = Math.max(0, boss.hp / boss.maxHp);
     const grad = ctx.createLinearGradient(bx, by, bx + bw, by);
-    grad.addColorStop(0, boss.phase === 2 ? '#ff4444' : '#9b59b6');
-    grad.addColorStop(1, boss.phase === 2 ? '#ff8844' : '#d465ff');
+    grad.addColorStop(0, boss.phase === 2 ? '#ff4444' : baseColor);
+    grad.addColorStop(1, boss.phase === 2 ? '#ff8844' : glowColor);
     ctx.fillStyle = grad;
     ctx.fillRect(bx, by, bw * pct, bh);
     ctx.font = 'bold 12px Cinzel';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
-    ctx.fillText(`DUNGEON LORD${boss.phase === 2 ? ' — ENRAGED' : ''}`, ROOM_W / 2, by + bh + 14);
+    const name = bdef ? bdef.name : 'DUNGEON LORD';
+    ctx.fillText(`${name}${boss.phase === 2 ? ' — ENRAGED' : ''}`, ROOM_W / 2, by + bh + 14);
   }
 
   // ── Game Over ──
