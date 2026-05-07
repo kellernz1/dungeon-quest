@@ -216,7 +216,7 @@ function generateDungeonRoom(
       traps.push(createTrap(tt, tx, ty, dir));
     }
   } else if (type === 'boss') {
-    enemies.push(createEnemy('boss', ROOM_W / 2, ROOM_H / 3, tierMul));
+    enemies.push(createEnemy('boss', ROOM_W / 2, ROOM_H / 3, tierMul, bossKindForTier(tier)));
     traps.push(createTrap('fire_vent', 150, 150));
     traps.push(createTrap('fire_vent', ROOM_W - 150, 150));
     traps.push(createTrap('fire_vent', 150, ROOM_H - 150));
