@@ -130,6 +130,11 @@ export interface Enemy extends Entity {
   shootTimer: number;
   phaseHP?: number;
   phase?: number;
+  bossKind?: BossKind;
+  /** Generic ability cooldown for boss patterns (charge, summon, teleport). */
+  abilityTimer?: number;
+  /** When > 0, boss is in mid-charge: vel is locked, ignore normal AI. */
+  chargeTimer?: number;
   statusEffects: StatusEffect[];
 }
 
