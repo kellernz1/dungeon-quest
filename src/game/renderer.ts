@@ -265,11 +265,12 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     const bob = Math.sin(time * 4 + (e.pos.x + e.pos.y) * 0.05) * 1.2;
     ctx.translate(0, bob);
 
+    const bossTint = e.type === 'boss' && e.bossKind ? BOSS_DEFS[e.bossKind].color : null;
     const baseColor = e.flashTimer > 0 ? '#fff' :
       e.statusEffects.some(s => s.type === 'freeze') ? '#74c0fc' :
       e.statusEffects.some(s => s.type === 'burn') ? '#ff7f50' :
       e.statusEffects.some(s => s.type === 'poison') ? '#98fb98' :
-      enemyColor(e.type);
+      bossTint ?? enemyColor(e.type);
 
     drawEnemySprite(ctx, e, baseColor, time);
 
