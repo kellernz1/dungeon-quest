@@ -57,6 +57,39 @@ export default function HeroSelect({ onSelect }: HeroSelectProps) {
         })}
       </div>
 
+      {hs.recent.length > 0 && (
+        <div className="w-full max-w-lg space-y-2">
+          <h4 className="font-display text-xs uppercase tracking-wider text-muted-foreground text-center">
+            Recent Runs
+          </h4>
+          <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
+            {hs.recent.map((r, i) => {
+              const mm = String(Math.floor(r.timeSec / 60)).padStart(2, '0');
+              const ss = String(Math.floor(r.timeSec % 60)).padStart(2, '0');
+              const isBest = hs.best && r.date === hs.best.date && r.score === hs.best.score;
+              return (
+                <div key={i} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                  <div className="flex items-center gap-2">
+                    {isBest && <Trophy className="w-3 h-3 text-xp" />}
+                    <span className="font-display text-foreground">
+                      {HERO_CONFIGS[r.heroClass].name}
+                    </span>
+                    <span className="text-muted-foreground">Lv.{r.level} · T{r.tier}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-muted-foreground font-mono">
+                    <span>{r.kills}k</span>
+                    <span>{mm}:{ss}</span>
+                    <span className={isBest ? 'text-xp font-bold' : 'text-foreground'}>
+                      {r.score}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <p className="text-muted-foreground text-xs">
         Arrow keys or WASD to move · Click to attack · Space for ability
       </p>
