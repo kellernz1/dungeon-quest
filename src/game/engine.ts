@@ -514,6 +514,15 @@ function transitionToRoom(state: GameState, targetRoomId: number, direction: Doo
     state.shopItems = generateShopItems(state.dungeon.tier);
     state.showShop = true;
   }
+
+  if (room.type === 'boss') {
+    const boss = state.enemies.find(e => e.type === 'boss');
+    if (boss?.bossKind) {
+      const bdef = BOSS_DEFS[boss.bossKind];
+      notify(state, `${bdef.name} — ${bdef.description}`, bdef.glow);
+      state.screenShake = 0.25;
+    }
+  }
 }
 
 // ── Level Up ──
