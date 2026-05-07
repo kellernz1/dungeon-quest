@@ -1,5 +1,6 @@
 import { HeroClass, HERO_CONFIGS } from '@/game/types';
-import { Swords, Target, Wand2, Scissors } from 'lucide-react';
+import { getHighScore } from '@/game/highscore';
+import { Swords, Target, Wand2, Scissors, Trophy } from 'lucide-react';
 
 interface HeroSelectProps {
   onSelect: (hero: HeroClass) => void;
