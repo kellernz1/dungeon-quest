@@ -14,6 +14,7 @@ const ICONS: Record<HeroClass, React.ReactNode> = {
 };
 
 export default function HeroSelect({ onSelect }: HeroSelectProps) {
+  const hs = getHighScore();
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-8 p-6">
       <div className="text-center space-y-3">
@@ -21,6 +22,12 @@ export default function HeroSelect({ onSelect }: HeroSelectProps) {
           DUNGEON RAMPAGE
         </h1>
         <p className="text-muted-foreground text-lg">Choose your champion</p>
+        {hs.best && (
+          <div className="inline-flex items-center gap-2 mt-2 px-4 py-1.5 rounded-full border border-xp/40 bg-xp/10 text-xp text-sm font-display">
+            <Trophy className="w-4 h-4" />
+            <span>Best: {hs.best.score} · {HERO_CONFIGS[hs.best.heroClass].name} Lv.{hs.best.level} · T{hs.best.tier}</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4 max-w-lg w-full">
