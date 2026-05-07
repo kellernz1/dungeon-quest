@@ -2,6 +2,7 @@ import {
   GameState, Player, Enemy, DungeonRoom, Dungeon, Door, Trap, Chest, Torch,
   Vector2, HeroClass, HERO_CONFIGS, EnemyType, WeaponRarity, LevelUpStat,
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
+  BossKind, BOSS_DEFS,
 } from './types';
 import { audio } from './audio';
 import { aggregateBonuses, canUnlockSkill, SKILL_TREES, SkillId } from './skills';
@@ -58,7 +59,7 @@ function notify(state: GameState, text: string, color: string) {
 
 // ── Enemy Creation ──
 
-function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1): Enemy {
+function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1, bossKind?: BossKind): Enemy {
   const configs: Record<EnemyType, {
     hp: number; speed: number; damage: number; size: number;
     xp: number; gold: number; isRanged: boolean; shootCd: number;
@@ -70,22 +71,42 @@ function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1): Enemy 
     boss:       { hp: 400,speed: 45,  damage: 30, size: 38, xp: 250, gold: 120, isRanged: true,  shootCd: 2 },
   };
   const c = configs[type];
+
+  // Boss kind modifiers
+  const bdef = bossKind ? BOSS_DEFS[bossKind] : null;
+  const hpMul = bdef ? bdef.hpMul : 1;
+  const spMul = bdef ? bdef.speedMul : 1;
+  const dmgMul = bdef ? bdef.damageMul : 1;
+  // Charge bosses are melee, others stay ranged.
+  const isRanged = bdef
+    ? (bdef.pattern === 'volley' || bdef.pattern === 'summon')
+    : c.isRanged;
+
   return {
     pos: { x, y }, vel: { x: 0, y: 0 },
     width: c.size, height: c.size,
-    hp: Math.floor(c.hp * tierMul), maxHp: Math.floor(c.hp * tierMul),
+    hp: Math.floor(c.hp * tierMul * hpMul), maxHp: Math.floor(c.hp * tierMul * hpMul),
     alive: true,
-    speed: c.speed, baseSpeed: c.speed, damage: Math.floor(c.damage * tierMul),
+    speed: c.speed * spMul, baseSpeed: c.speed * spMul,
+    damage: Math.floor(c.damage * tierMul * dmgMul),
     attackCooldown: 1, attackTimer: 0,
     state: 'idle', type,
     knockbackTimer: 0, flashTimer: 0,
     xpValue: Math.floor(c.xp * tierMul), goldValue: Math.floor(c.gold * tierMul),
-    isRanged: c.isRanged,
+    isRanged,
     shootCooldown: c.shootCd, shootTimer: c.shootCd,
     statusEffects: [],
     phase: type === 'boss' ? 1 : undefined,
-    phaseHP: type === 'boss' ? Math.floor(c.hp * tierMul * 0.5) : undefined,
+    phaseHP: type === 'boss' ? Math.floor(c.hp * tierMul * hpMul * 0.5) : undefined,
+    bossKind,
+    abilityTimer: type === 'boss' ? 3 : undefined,
+    chargeTimer: 0,
   };
+}
+
+function bossKindForTier(tier: number): BossKind {
+  const order: BossKind[] = ['cave_brute', 'crypt_lich', 'fortress_warlord', 'shadow_wraith'];
+  return order[Math.min(tier - 1, order.length - 1)];
 }
 
 // ── Trap Creation ──
@@ -195,7 +216,7 @@ function generateDungeonRoom(
       traps.push(createTrap(tt, tx, ty, dir));
     }
   } else if (type === 'boss') {
-    enemies.push(createEnemy('boss', ROOM_W / 2, ROOM_H / 3, tierMul));
+    enemies.push(createEnemy('boss', ROOM_W / 2, ROOM_H / 3, tierMul, bossKindForTier(tier)));
     traps.push(createTrap('fire_vent', 150, 150));
     traps.push(createTrap('fire_vent', ROOM_W - 150, 150));
     traps.push(createTrap('fire_vent', 150, ROOM_H - 150));
@@ -493,6 +514,15 @@ function transitionToRoom(state: GameState, targetRoomId: number, direction: Doo
     state.shopItems = generateShopItems(state.dungeon.tier);
     state.showShop = true;
   }
+
+  if (room.type === 'boss') {
+    const boss = state.enemies.find(e => e.type === 'boss');
+    if (boss?.bossKind) {
+      const bdef = BOSS_DEFS[boss.bossKind];
+      notify(state, `${bdef.name} — ${bdef.description}`, bdef.glow);
+      state.screenShake = 0.25;
+    }
+  }
 }
 
 // ── Level Up ──
@@ -565,6 +595,169 @@ export function unlockSkill(state: GameState, skillId: SkillId): boolean {
   audio.play('level_up');
   spawnParticles(state, p.pos, '#9b59b6', 20);
   return true;
+}
+
+
+// ── Boss patterns ──
+
+function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): void {
+  const p = state.player;
+  const bdef = e.bossKind ? BOSS_DEFS[e.bossKind] : null;
+  if (!bdef) return;
+
+  e.abilityTimer = (e.abilityTimer ?? 0) - dt;
+  e.chargeTimer = (e.chargeTimer ?? 0) - dt;
+
+  // Mid-charge: keep moving locked velocity, deal contact damage
+  if ((e.chargeTimer ?? 0) > 0) {
+    e.pos.x += e.vel.x * dt;
+    e.pos.y += e.vel.y * dt;
+    if (d < 36 && p.iFrames <= 0) {
+      p.hp -= e.damage;
+      p.iFrames = 0.6;
+      const kb = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+      p.pos.x += kb.x * 60; p.pos.y += kb.y * 60;
+      spawnParticles(state, p.pos, '#ff7733', 10);
+      spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
+      state.screenShake = 0.25;
+      audio.play('player_hurt');
+      e.chargeTimer = 0;
+    }
+    // bounce off walls
+    if (e.pos.x < TILE + e.width / 2 || e.pos.x > ROOM_W - TILE - e.width / 2 ||
+        e.pos.y < TILE + e.height / 2 || e.pos.y > ROOM_H - TILE - e.height / 2) {
+      e.chargeTimer = 0;
+      state.screenShake = 0.2;
+    }
+    return;
+  }
+
+  switch (bdef.pattern) {
+    case 'charge': {
+      // Slow chase, periodic dash
+      if (d > 32) {
+        const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+        e.pos.x += dir.x * e.speed * dt;
+        e.pos.y += dir.y * e.speed * dt;
+      }
+      if ((e.abilityTimer ?? 0) <= 0) {
+        e.abilityTimer = e.phase === 2 ? 2.2 : 3.5;
+        const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+        const dashSpeed = 480 * (e.phase === 2 ? 1.2 : 1);
+        e.vel = { x: dir.x * dashSpeed, y: dir.y * dashSpeed };
+        e.chargeTimer = 0.6;
+        spawnParticles(state, e.pos, bdef.glow, 14);
+      }
+      // Melee contact
+      if (d < 30 && e.attackTimer <= 0 && p.iFrames <= 0) {
+        e.attackTimer = e.attackCooldown;
+        p.hp -= e.damage;
+        p.iFrames = 0.5;
+        spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
+        audio.play('player_hurt');
+      }
+      break;
+    }
+    case 'volley': {
+      // Strafe at medium range, fire arrow spread on cooldown
+      if (d > 220) {
+        const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+        e.pos.x += dir.x * e.speed * dt;
+        e.pos.y += dir.y * e.speed * dt;
+      } else if (d < 160) {
+        const dir = normalize({ x: e.pos.x - p.pos.x, y: e.pos.y - p.pos.y });
+        e.pos.x += dir.x * e.speed * 0.8 * dt;
+        e.pos.y += dir.y * e.speed * 0.8 * dt;
+      } else {
+        // strafe perpendicular
+        const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+        e.pos.x += -dir.y * e.speed * 0.6 * dt;
+        e.pos.y +=  dir.x * e.speed * 0.6 * dt;
+      }
+      if ((e.abilityTimer ?? 0) <= 0) {
+        e.abilityTimer = e.phase === 2 ? 1.4 : 2.2;
+        const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+        const arrows = e.phase === 2 ? 7 : 5;
+        const spread = 0.5;
+        for (let i = 0; i < arrows; i++) {
+          const a = Math.atan2(dir.y, dir.x) + (i - (arrows - 1) / 2) * (spread / arrows);
+          state.projectiles.push({
+            pos: { x: e.pos.x, y: e.pos.y },
+            vel: { x: Math.cos(a) * 240, y: Math.sin(a) * 240 },
+            damage: Math.floor(e.damage * 0.7), radius: 4, lifetime: 2.2, fromPlayer: false,
+            color: bdef.glow,
+          });
+        }
+        audio.play('attack_ranged');
+      }
+      break;
+    }
+    case 'summon': {
+      // Keep distance, throw dark bolts; periodically summon adds
+      if (d < 220) {
+        const dir = normalize({ x: e.pos.x - p.pos.x, y: e.pos.y - p.pos.y });
+        e.pos.x += dir.x * e.speed * dt;
+        e.pos.y += dir.y * e.speed * dt;
+      }
+      if (e.shootTimer <= 0 && d < 360) {
+        e.shootTimer = e.shootCooldown;
+        const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+        state.projectiles.push({
+          pos: { x: e.pos.x, y: e.pos.y },
+          vel: { x: dir.x * 200, y: dir.y * 200 },
+          damage: e.damage, radius: 6, lifetime: 2.5, fromPlayer: false,
+          color: bdef.glow,
+        });
+      }
+      if ((e.abilityTimer ?? 0) <= 0) {
+        e.abilityTimer = e.phase === 2 ? 6 : 9;
+        const adds = e.phase === 2 ? 3 : 2;
+        for (let i = 0; i < adds; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const r = 60;
+          const sx = e.pos.x + Math.cos(angle) * r;
+          const sy = e.pos.y + Math.sin(angle) * r;
+          const skel = createEnemy('skeleton', sx, sy, 1 + (state.dungeon.tier - 1) * 0.3);
+          state.enemies.push(skel);
+          spawnParticles(state, { x: sx, y: sy }, bdef.glow, 12);
+        }
+        notify(state, 'The Lich raises the dead!', bdef.glow);
+        audio.play('ability');
+      }
+      break;
+    }
+    case 'teleport': {
+      // Slowly drifts toward player; teleports near player and slashes
+      if (d > 80) {
+        const dir = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
+        e.pos.x += dir.x * e.speed * 0.5 * dt;
+        e.pos.y += dir.y * e.speed * 0.5 * dt;
+      }
+      if ((e.abilityTimer ?? 0) <= 0) {
+        e.abilityTimer = e.phase === 2 ? 2.5 : 4;
+        // Teleport behind player
+        const facing = normalize({ x: p.facing.x, y: p.facing.y });
+        const tx = Math.max(TILE * 2, Math.min(ROOM_W - TILE * 2, p.pos.x - facing.x * 50));
+        const ty = Math.max(TILE * 2, Math.min(ROOM_H - TILE * 2, p.pos.y - facing.y * 50));
+        spawnParticles(state, e.pos, bdef.glow, 18);
+        e.pos = { x: tx, y: ty };
+        spawnParticles(state, e.pos, bdef.glow, 18);
+        // Immediate strike
+        if (p.iFrames <= 0) {
+          p.hp -= e.damage;
+          p.iFrames = 0.5;
+          spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
+          state.screenShake = 0.18;
+          audio.play('player_hurt');
+        }
+      }
+      break;
+    }
+  }
+
+  // Clamp boss to room
+  e.pos.x = Math.max(TILE + e.width / 2, Math.min(ROOM_W - TILE - e.width / 2, e.pos.x));
+  e.pos.y = Math.max(TILE + e.height / 2, Math.min(ROOM_H - TILE - e.height / 2, e.pos.y));
 }
 
 
@@ -956,8 +1149,15 @@ export function updateGame(state: GameState, dt: number): void {
       e.shootCooldown *= 0.6;
       e.damage = Math.floor(e.damage * 1.3);
       spawnParticles(state, e.pos, '#e74c3c', 30);
-      notify(state, 'BOSS ENRAGED!', '#e74c3c');
+      const bdef = e.bossKind ? BOSS_DEFS[e.bossKind] : null;
+      notify(state, `${bdef ? bdef.name : 'BOSS'} ENRAGED!`, '#e74c3c');
       state.screenShake = 0.3;
+    }
+
+    // Boss pattern AI (overrides generic)
+    if (e.type === 'boss' && e.bossKind) {
+      updateBossPattern(state, e, dt, d);
+      continue;
     }
 
     if (e.isRanged) {

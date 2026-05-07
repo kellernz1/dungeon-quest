@@ -20,6 +20,42 @@ export type EnemyType = 'goblin' | 'skeleton' | 'orc' | 'necromancer' | 'boss';
 export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type TrapType = 'spikes' | 'arrow_launcher' | 'fire_vent';
 export type LevelUpStat = 'hp' | 'attack' | 'speed' | 'mana';
+export type BossKind = 'cave_brute' | 'crypt_lich' | 'fortress_warlord' | 'shadow_wraith';
+
+export interface BossDef {
+  kind: BossKind;
+  name: string;
+  color: string;
+  glow: string;
+  hpMul: number;
+  speedMul: number;
+  damageMul: number;
+  pattern: 'charge' | 'summon' | 'volley' | 'teleport';
+  description: string;
+}
+
+export const BOSS_DEFS: Record<BossKind, BossDef> = {
+  cave_brute: {
+    kind: 'cave_brute', name: 'CAVE BRUTE', color: '#a14a2a', glow: '#ff7733',
+    hpMul: 1.2, speedMul: 1.0, damageMul: 1.2, pattern: 'charge',
+    description: 'Charges in straight lines and shakes the ground.',
+  },
+  crypt_lich: {
+    kind: 'crypt_lich', name: 'CRYPT LICH', color: '#7a4a9a', glow: '#b197fc',
+    hpMul: 0.9, speedMul: 0.8, damageMul: 1.0, pattern: 'summon',
+    description: 'Summons skeletons and casts dark bolts from afar.',
+  },
+  fortress_warlord: {
+    kind: 'fortress_warlord', name: 'FORTRESS WARLORD', color: '#c0392b', glow: '#ff4444',
+    hpMul: 1.4, speedMul: 0.9, damageMul: 1.3, pattern: 'volley',
+    description: 'Looses spreads of arrows in punishing volleys.',
+  },
+  shadow_wraith: {
+    kind: 'shadow_wraith', name: 'SHADOW WRAITH', color: '#3a2a55', glow: '#9b59b6',
+    hpMul: 0.85, speedMul: 1.2, damageMul: 1.15, pattern: 'teleport',
+    description: 'Phases through space and ambushes from the dark.',
+  },
+};
 
 export interface Weapon {
   id: string;
@@ -94,6 +130,11 @@ export interface Enemy extends Entity {
   shootTimer: number;
   phaseHP?: number;
   phase?: number;
+  bossKind?: BossKind;
+  /** Generic ability cooldown for boss patterns (charge, summon, teleport). */
+  abilityTimer?: number;
+  /** When > 0, boss is in mid-charge: vel is locked, ignore normal AI. */
+  chargeTimer?: number;
   statusEffects: StatusEffect[];
 }
 
