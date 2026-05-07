@@ -2,6 +2,7 @@ import {
   GameState, Player, Enemy, DungeonRoom, Dungeon, Door, Trap, Chest, Torch,
   Vector2, HeroClass, HERO_CONFIGS, EnemyType, WeaponRarity, LevelUpStat,
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
+  BossKind, BOSS_DEFS,
 } from './types';
 import { audio } from './audio';
 import { aggregateBonuses, canUnlockSkill, SKILL_TREES, SkillId } from './skills';
