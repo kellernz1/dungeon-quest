@@ -59,7 +59,7 @@ function notify(state: GameState, text: string, color: string) {
 
 // ── Enemy Creation ──
 
-function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1): Enemy {
+function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1, bossKind?: BossKind): Enemy {
   const configs: Record<EnemyType, {
     hp: number; speed: number; damage: number; size: number;
     xp: number; gold: number; isRanged: boolean; shootCd: number;
@@ -71,22 +71,42 @@ function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1): Enemy 
     boss:       { hp: 400,speed: 45,  damage: 30, size: 38, xp: 250, gold: 120, isRanged: true,  shootCd: 2 },
   };
   const c = configs[type];
+
+  // Boss kind modifiers
+  const bdef = bossKind ? BOSS_DEFS[bossKind] : null;
+  const hpMul = bdef ? bdef.hpMul : 1;
+  const spMul = bdef ? bdef.speedMul : 1;
+  const dmgMul = bdef ? bdef.damageMul : 1;
+  // Charge bosses are melee, others stay ranged.
+  const isRanged = bdef
+    ? (bdef.pattern === 'volley' || bdef.pattern === 'summon')
+    : c.isRanged;
+
   return {
     pos: { x, y }, vel: { x: 0, y: 0 },
     width: c.size, height: c.size,
-    hp: Math.floor(c.hp * tierMul), maxHp: Math.floor(c.hp * tierMul),
+    hp: Math.floor(c.hp * tierMul * hpMul), maxHp: Math.floor(c.hp * tierMul * hpMul),
     alive: true,
-    speed: c.speed, baseSpeed: c.speed, damage: Math.floor(c.damage * tierMul),
+    speed: c.speed * spMul, baseSpeed: c.speed * spMul,
+    damage: Math.floor(c.damage * tierMul * dmgMul),
     attackCooldown: 1, attackTimer: 0,
     state: 'idle', type,
     knockbackTimer: 0, flashTimer: 0,
     xpValue: Math.floor(c.xp * tierMul), goldValue: Math.floor(c.gold * tierMul),
-    isRanged: c.isRanged,
+    isRanged,
     shootCooldown: c.shootCd, shootTimer: c.shootCd,
     statusEffects: [],
     phase: type === 'boss' ? 1 : undefined,
-    phaseHP: type === 'boss' ? Math.floor(c.hp * tierMul * 0.5) : undefined,
+    phaseHP: type === 'boss' ? Math.floor(c.hp * tierMul * hpMul * 0.5) : undefined,
+    bossKind,
+    abilityTimer: type === 'boss' ? 3 : undefined,
+    chargeTimer: 0,
   };
+}
+
+function bossKindForTier(tier: number): BossKind {
+  const order: BossKind[] = ['cave_brute', 'crypt_lich', 'fortress_warlord', 'shadow_wraith'];
+  return order[Math.min(tier - 1, order.length - 1)];
 }
 
 // ── Trap Creation ──
