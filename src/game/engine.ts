@@ -977,8 +977,15 @@ export function updateGame(state: GameState, dt: number): void {
       e.shootCooldown *= 0.6;
       e.damage = Math.floor(e.damage * 1.3);
       spawnParticles(state, e.pos, '#e74c3c', 30);
-      notify(state, 'BOSS ENRAGED!', '#e74c3c');
+      const bdef = e.bossKind ? BOSS_DEFS[e.bossKind] : null;
+      notify(state, `${bdef ? bdef.name : 'BOSS'} ENRAGED!`, '#e74c3c');
       state.screenShake = 0.3;
+    }
+
+    // Boss pattern AI (overrides generic)
+    if (e.type === 'boss' && e.bossKind) {
+      updateBossPattern(state, e, dt, d);
+      continue;
     }
 
     if (e.isRanged) {
