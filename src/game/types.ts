@@ -135,6 +135,8 @@ export interface Enemy extends Entity {
   abilityTimer?: number;
   /** When > 0, boss is in mid-charge: vel is locked, ignore normal AI. */
   chargeTimer?: number;
+  /** When > 0, boss is mid phase-transition cinematic (frozen, dramatic VFX). */
+  phaseTransitionTimer?: number;
   statusEffects: StatusEffect[];
 }
 

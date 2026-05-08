@@ -417,14 +417,17 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     const bdef = boss.bossKind ? BOSS_DEFS[boss.bossKind] : null;
     const baseColor = bdef ? bdef.color : '#9b59b6';
     const glowColor = bdef ? bdef.glow : '#d465ff';
+    const transitioning = (boss.phaseTransitionTimer ?? 0) > 0;
+    // Flash white/red during the cinematic
+    const flash = transitioning && Math.floor(state.time * 14) % 2 === 0;
     const bw = 500;
     const bh = 18;
     const bx = (ROOM_W - bw) / 2;
     const by = 14;
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillStyle = flash ? 'rgba(80,0,0,0.85)' : 'rgba(0,0,0,0.7)';
     ctx.fillRect(bx - 6, by - 6, bw + 12, bh + 26);
-    ctx.strokeStyle = boss.phase === 2 ? '#ff4444' : baseColor;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = flash ? '#ffffff' : (boss.phase === 2 ? '#ff4444' : baseColor);
+    ctx.lineWidth = transitioning ? 3 : 2;
     ctx.strokeRect(bx - 6, by - 6, bw + 12, bh + 26);
     ctx.fillStyle = '#1a0a14';
     ctx.fillRect(bx, by, bw, bh);
@@ -434,11 +437,40 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     grad.addColorStop(1, boss.phase === 2 ? '#ff8844' : glowColor);
     ctx.fillStyle = grad;
     ctx.fillRect(bx, by, bw * pct, bh);
-    ctx.font = 'bold 12px Cinzel';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
     const name = bdef ? bdef.name : 'DUNGEON LORD';
-    ctx.fillText(`${name}${boss.phase === 2 ? ' — ENRAGED' : ''}`, ROOM_W / 2, by + bh + 14);
+    if (transitioning) {
+      ctx.save();
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 18;
+      ctx.font = 'bold 18px Cinzel';
+      ctx.fillStyle = flash ? '#ffffff' : glowColor;
+      ctx.textAlign = 'center';
+      ctx.fillText(`${name} — ENRAGED!`, ROOM_W / 2, by + bh + 18);
+      ctx.restore();
+    } else {
+      ctx.font = 'bold 12px Cinzel';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${name}${boss.phase === 2 ? ' — ENRAGED' : ''}`, ROOM_W / 2, by + bh + 14);
+    }
+
+    // Expanding shockwave rings around boss during the transition
+    if (transitioning) {
+      const t = 1 - (boss.phaseTransitionTimer ?? 0) / 1.1;
+      ctx.save();
+      ctx.translate(boss.pos.x, boss.pos.y);
+      for (let i = 0; i < 3; i++) {
+        const phase = (t + i / 3) % 1;
+        const r = 20 + phase * 180;
+        ctx.globalAlpha = (1 - phase) * 0.85;
+        ctx.strokeStyle = i === 1 ? '#ffffff' : glowColor;
+        ctx.lineWidth = 4 - phase * 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 
   // ── Game Over ──

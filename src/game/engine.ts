@@ -607,6 +607,24 @@ function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): v
 
   e.abilityTimer = (e.abilityTimer ?? 0) - dt;
   e.chargeTimer = (e.chargeTimer ?? 0) - dt;
+  e.phaseTransitionTimer = (e.phaseTransitionTimer ?? 0) - dt;
+
+  // Phase-transition cinematic: freeze boss, emit pulsing ring VFX
+  if ((e.phaseTransitionTimer ?? 0) > 0) {
+    e.vel = { x: 0, y: 0 };
+    if (Math.random() < 0.6) {
+      const a = Math.random() * Math.PI * 2;
+      const speed = 120 + Math.random() * 160;
+      state.particles.push({
+        pos: { x: e.pos.x, y: e.pos.y },
+        vel: { x: Math.cos(a) * speed, y: Math.sin(a) * speed },
+        lifetime: 0.5, maxLifetime: 0.5,
+        color: bdef.glow, size: 3,
+      });
+    }
+    state.screenShake = Math.max(state.screenShake, 0.15);
+    return;
+  }
 
   // Mid-charge: keep moving locked velocity, deal contact damage
   if ((e.chargeTimer ?? 0) > 0) {
@@ -1142,16 +1160,58 @@ export function updateGame(state: GameState, dt: number): void {
     const d = dist(e.pos, p.pos);
     if (d < 250) e.state = 'chase';
 
-    // Boss phase transition
+    // Boss phase transition — dramatic cinematic
     if (e.type === 'boss' && e.phase === 1 && e.phaseHP && e.hp <= e.phaseHP) {
       e.phase = 2;
       e.speed = e.baseSpeed * 1.5;
       e.shootCooldown *= 0.6;
       e.damage = Math.floor(e.damage * 1.3);
-      spawnParticles(state, e.pos, '#e74c3c', 30);
       const bdef = e.bossKind ? BOSS_DEFS[e.bossKind] : null;
-      notify(state, `${bdef ? bdef.name : 'BOSS'} ENRAGED!`, '#e74c3c');
-      state.screenShake = 0.3;
+      const cBase = bdef ? bdef.color : '#9b59b6';
+      const cGlow = bdef ? bdef.glow : '#d465ff';
+      // Lock the boss for the cinematic and clear any in-progress action
+      e.phaseTransitionTimer = 1.1;
+      e.chargeTimer = 0;
+      e.abilityTimer = 1.6; // boss can't immediately hit when transition ends
+      e.shootTimer = 1.6;
+      e.vel = { x: 0, y: 0 };
+      e.statusEffects = e.statusEffects.filter(s => s.type !== 'stun');
+      // Screen-shake + audio stinger
+      state.screenShake = Math.max(state.screenShake, 0.85);
+      audio.play('level_up');
+      audio.play('ability');
+      // Triple particle burst (two colors + white core)
+      spawnParticles(state, e.pos, cGlow, 60);
+      spawnParticles(state, e.pos, cBase, 40);
+      spawnParticles(state, e.pos, '#ffffff', 18);
+      // Ring shockwave: particles flung in a perfect ring
+      const ringCount = 36;
+      for (let i = 0; i < ringCount; i++) {
+        const a = (i / ringCount) * Math.PI * 2;
+        state.particles.push({
+          pos: { x: e.pos.x, y: e.pos.y },
+          vel: { x: Math.cos(a) * 280, y: Math.sin(a) * 280 },
+          lifetime: 0.9, maxLifetime: 0.9,
+          color: cGlow, size: 4,
+        });
+        state.particles.push({
+          pos: { x: e.pos.x, y: e.pos.y },
+          vel: { x: Math.cos(a) * 180, y: Math.sin(a) * 180 },
+          lifetime: 0.7, maxLifetime: 0.7,
+          color: '#ffffff', size: 2,
+        });
+      }
+      // Fairness: give the player iFrames + reset their ability cooldown
+      p.iFrames = Math.max(p.iFrames, 1.2);
+      p.attackTimer = 0;
+      p.abilityTimer = 0;
+      p.dodgeCooldownTimer = 0;
+      // Cinematic banner (longer than default notify)
+      state.notification = {
+        text: `${bdef ? bdef.name : 'BOSS'} ENRAGED — PHASE 2`,
+        timer: 3.5,
+        color: cGlow,
+      };
     }
 
     // Boss pattern AI (overrides generic)
