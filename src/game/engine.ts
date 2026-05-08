@@ -1377,27 +1377,41 @@ export function updateGame(state: GameState, dt: number): void {
     notify(state, 'ROOM CLEARED!', '#f1c40f');
     p.hp = Math.min(p.maxHp, p.hp + Math.floor(p.maxHp * 0.15));
 
-    if (room.type === 'boss') {
-      const nextTier = state.dungeon.tier + 1;
-      const themes: DungeonRoom['theme'][] = ['cave', 'crypt', 'fortress', 'shadow'];
-      notify(state, `Dungeon Tier ${nextTier} — ${themes[Math.min(nextTier - 1, 3)].toUpperCase()}!`, '#ffd43b');
-      setTimeout(() => {
-        const newDungeon = generateDungeon(nextTier);
-        state.dungeon = newDungeon;
-        state.wave = nextTier;
-        const startRoom = newDungeon.rooms[0];
-        state.room = startRoom;
-        state.enemies = [...startRoom.enemies];
-        state.traps = [...startRoom.traps];
-        state.chests = [...startRoom.chests];
-        state.torches = [...startRoom.torches];
-        state.projectiles = [];
-        state.loot = [];
-        state.shopItems = [];
-        p.pos = { x: ROOM_W / 2, y: ROOM_H / 2 };
-        p.hp = p.maxHp;
-        p.mana = p.maxMana;
-      }, 2500);
+    // Boss-room clear is now driven by the bossOutro cinematic (set on boss death).
+  }
+
+  // ── Boss outro cinematic ──
+  if (state.bossOutro) {
+    state.bossOutro.timer -= dt;
+    // Subtle ambient sparkle drifting up from the player while we wait
+    if (Math.random() < 0.4) {
+      state.particles.push({
+        pos: { x: p.pos.x + (Math.random() - 0.5) * 40, y: p.pos.y + 20 },
+        vel: { x: (Math.random() - 0.5) * 30, y: -40 - Math.random() * 40 },
+        lifetime: 0.8, maxLifetime: 0.8,
+        color: '#ffd43b', size: 2,
+      });
+    }
+    if (state.bossOutro.timer <= 0) {
+      const nextTier = state.bossOutro.nextTier;
+      const newDungeon = generateDungeon(nextTier);
+      state.dungeon = newDungeon;
+      state.wave = nextTier;
+      const startRoom = newDungeon.rooms[0];
+      state.room = startRoom;
+      state.enemies = [...startRoom.enemies];
+      state.traps = [...startRoom.traps];
+      state.chests = [...startRoom.chests];
+      state.torches = [...startRoom.torches];
+      state.projectiles = [];
+      state.loot = [];
+      state.shopItems = [];
+      p.pos = { x: ROOM_W / 2, y: ROOM_H / 2 };
+      p.hp = p.maxHp;
+      p.mana = p.maxMana;
+      p.iFrames = 1.2;
+      state.bossOutro = null;
+      notify(state, `Dungeon Tier ${nextTier} — ${state.bossOutro?.theme ?? ''}`, '#ffd43b');
     }
   }
 
