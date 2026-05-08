@@ -1393,7 +1393,7 @@ export function updateGame(state: GameState, dt: number): void {
       });
     }
     if (state.bossOutro.timer <= 0) {
-      const nextTier = state.bossOutro.nextTier;
+      const { nextTier, theme } = state.bossOutro;
       const newDungeon = generateDungeon(nextTier);
       state.dungeon = newDungeon;
       state.wave = nextTier;
@@ -1411,7 +1411,7 @@ export function updateGame(state: GameState, dt: number): void {
       p.mana = p.maxMana;
       p.iFrames = 1.2;
       state.bossOutro = null;
-      notify(state, `Dungeon Tier ${nextTier} — ${state.bossOutro?.theme ?? ''}`, '#ffd43b');
+      notify(state, `Dungeon Tier ${nextTier} — ${theme}`, '#ffd43b');
     }
   }
 
