@@ -607,6 +607,24 @@ function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): v
 
   e.abilityTimer = (e.abilityTimer ?? 0) - dt;
   e.chargeTimer = (e.chargeTimer ?? 0) - dt;
+  e.phaseTransitionTimer = (e.phaseTransitionTimer ?? 0) - dt;
+
+  // Phase-transition cinematic: freeze boss, emit pulsing ring VFX
+  if ((e.phaseTransitionTimer ?? 0) > 0) {
+    e.vel = { x: 0, y: 0 };
+    if (Math.random() < 0.6) {
+      const a = Math.random() * Math.PI * 2;
+      const speed = 120 + Math.random() * 160;
+      state.particles.push({
+        pos: { x: e.pos.x, y: e.pos.y },
+        vel: { x: Math.cos(a) * speed, y: Math.sin(a) * speed },
+        lifetime: 0.5, maxLifetime: 0.5,
+        color: bdef.glow, size: 3,
+      });
+    }
+    state.screenShake = Math.max(state.screenShake, 0.15);
+    return;
+  }
 
   // Mid-charge: keep moving locked velocity, deal contact damage
   if ((e.chargeTimer ?? 0) > 0) {
