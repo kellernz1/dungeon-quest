@@ -448,6 +448,7 @@ export function initGameState(heroClass: HeroClass): GameState {
     showMap: false,
     showHelp: false,
     runResult: null,
+    bossOutro: null,
   };
 }
 
