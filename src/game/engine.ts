@@ -786,6 +786,11 @@ function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): v
 export function updateGame(state: GameState, dt: number): void {
   if (state.gameOver) return;
   if (state.paused) return;
+  // Slow-mo during a boss phase-transition cinematic
+  const inPhaseCinematic = state.enemies.some(
+    e => e.alive && e.type === 'boss' && (e.phaseTransitionTimer ?? 0) > 0
+  );
+  if (inPhaseCinematic) dt *= 0.4;
   state.time += dt;
 
   // Transition animation
