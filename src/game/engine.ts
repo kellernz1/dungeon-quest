@@ -1329,6 +1329,24 @@ export function updateGame(state: GameState, dt: number): void {
           color: cGlow,
         };
         audio.play('level_up');
+
+        // Clear nearby enemies (e.g. summoned adds) with their own VFX
+        for (const other of state.enemies) {
+          if (!other.alive || other === e) continue;
+          spawnParticles(state, other.pos, cGlow, 14);
+          spawnParticles(state, other.pos, '#ffffff', 6);
+          spawnDamageNumber(state, other.pos, other.hp, '#ffffff', true, 'PURGED');
+          other.hp = 0;
+          other.alive = false;
+          p.killCount++;
+        }
+        state.projectiles = state.projectiles.filter(pr => pr.fromPlayer);
+
+        // Kick off the cinematic outro countdown
+        const nextTier = state.dungeon.tier + 1;
+        const themes: DungeonRoom['theme'][] = ['cave', 'crypt', 'fortress', 'shadow'];
+        const themeName = themes[Math.min(nextTier - 1, 3)].toUpperCase();
+        state.bossOutro = { timer: 4, total: 4, nextTier, theme: themeName };
       } else {
         spawnParticles(state, e.pos, '#e74c3c', 15);
       }
