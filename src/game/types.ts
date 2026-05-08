@@ -277,6 +277,13 @@ export interface GameState {
   showSkillTree: boolean;
   showMap: boolean;
   showHelp: boolean;
+  /** Cinematic post-boss outro: countdown then spawn next tier. */
+  bossOutro: {
+    timer: number;
+    total: number;
+    nextTier: number;
+    theme: string;
+  } | null;
   runResult: {
     score: number;
     isNewBest: boolean;
