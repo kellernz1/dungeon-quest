@@ -315,48 +315,6 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     drawHeroSprite(ctx, p, time);
     ctx.globalAlpha = 1;
 
-  // ── Boss outro cinematic (countdown) ──
-  if (state.bossOutro) {
-    const o = state.bossOutro;
-    const elapsed = o.total - o.timer;
-    // Vignette darkens as countdown progresses
-    const vAlpha = Math.min(0.7, 0.25 + elapsed / o.total * 0.55);
-    ctx.fillStyle = `rgba(0,0,0,${vAlpha})`;
-    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
-
-    ctx.textAlign = 'center';
-    ctx.save();
-    ctx.shadowColor = '#ffd43b';
-    ctx.shadowBlur = 24;
-    ctx.font = 'bold 28px Cinzel';
-    ctx.fillStyle = '#ffd43b';
-    ctx.fillText(`ENTERING TIER ${o.nextTier}`, ROOM_W / 2, ROOM_H / 2 - 90);
-    ctx.font = 'bold 18px Cinzel';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(o.theme, ROOM_W / 2, ROOM_H / 2 - 56);
-    ctx.restore();
-
-    // Countdown number (3..2..1) — pulses each second
-    const secsLeft = Math.max(1, Math.ceil(o.timer));
-    if (o.timer > 0 && o.timer <= 3) {
-      const phase = 1 - (o.timer - Math.floor(o.timer)); // 0→1 within the second
-      const scale = 1.4 - phase * 0.5;
-      const alpha = 1 - phase * 0.7;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(ROOM_W / 2, ROOM_H / 2 + 20);
-      ctx.scale(scale, scale);
-      ctx.shadowColor = '#ff8844';
-      ctx.shadowBlur = 30;
-      ctx.font = 'bold 120px Cinzel';
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(secsLeft), 0, 0);
-      ctx.restore();
-      ctx.textBaseline = 'alphabetic';
-    }
-  }
 
     ctx.restore();
   }
