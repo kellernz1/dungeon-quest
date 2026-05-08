@@ -1297,7 +1297,40 @@ export function updateGame(state: GameState, dt: number): void {
     if (e.hp <= 0) {
       e.alive = false;
       p.killCount++;
-      spawnParticles(state, e.pos, '#e74c3c', 15);
+      if (e.type === 'boss') {
+        const bdef = e.bossKind ? BOSS_DEFS[e.bossKind] : null;
+        const cBase = bdef ? bdef.color : '#9b59b6';
+        const cGlow = bdef ? bdef.glow : '#d465ff';
+        // Triple burst + ring shockwave (mirrors phase-2 cinematic)
+        spawnParticles(state, e.pos, cGlow, 80);
+        spawnParticles(state, e.pos, cBase, 50);
+        spawnParticles(state, e.pos, '#ffffff', 30);
+        const ringCount = 48;
+        for (let i = 0; i < ringCount; i++) {
+          const a = (i / ringCount) * Math.PI * 2;
+          state.particles.push({
+            pos: { x: e.pos.x, y: e.pos.y },
+            vel: { x: Math.cos(a) * 340, y: Math.sin(a) * 340 },
+            lifetime: 1.1, maxLifetime: 1.1,
+            color: cGlow, size: 5,
+          });
+          state.particles.push({
+            pos: { x: e.pos.x, y: e.pos.y },
+            vel: { x: Math.cos(a) * 220, y: Math.sin(a) * 220 },
+            lifetime: 0.8, maxLifetime: 0.8,
+            color: '#ffffff', size: 2,
+          });
+        }
+        state.screenShake = Math.max(state.screenShake, 1.0);
+        state.notification = {
+          text: `${bdef ? bdef.name : 'BOSS'} VANQUISHED!`,
+          timer: 4,
+          color: cGlow,
+        };
+        audio.play('level_up');
+      } else {
+        spawnParticles(state, e.pos, '#e74c3c', 15);
+      }
       spawnLoot(state, e.pos, e.goldValue, state.dungeon.tier);
       const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
       p.xp += Math.floor(e.xpValue * (1 + sb.xpMul));
