@@ -1,7 +1,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { initGameState, updateGame, applyLevelUpChoice, unlockSkill } from '@/game/engine';
+import { initGameState, updateGame, applyLevelUpChoice, unlockSkill, syncPlayerWeaponStats } from '@/game/engine';
 import { renderGame } from '@/game/renderer';
 import { audio } from '@/game/audio';
+import { CoopClient } from '@/game/network';
 import { GameState, HeroClass, RARITY_COLORS, EFFECT_COLORS, LevelUpStat, HERO_CONFIGS } from '@/game/types';
 import { SKILL_TREES, SkillNode } from '@/game/skills';
 
@@ -18,7 +19,9 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
   const stateRef = useRef<GameState>(initGameState(heroClass));
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+  const networkRef = useRef<CoopClient>(new CoopClient());
   const [restartKey, setRestartKey] = useState(0);
+  const [, setUiTick] = useState(0);
 
   const restart = useCallback(() => {
     stateRef.current = initGameState(heroClass);
@@ -122,6 +125,9 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
             state.player.gold -= item.price;
             state.player.inventory.push(item.weapon);
             item.sold = true;
+            if (state.coop.connected && state.coop.role === 'guest') {
+              state.coop.outgoingEvents.push({ type: 'buyShopItem', itemIndex: idx });
+            }
             audio.play('shop_buy');
           }
         }
@@ -134,9 +140,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
           const old = state.player.weapon;
           state.player.weapon = state.player.inventory[idx];
           state.player.inventory[idx] = old;
-          state.player.attackDamage = state.player.weapon.damage;
-          state.player.attackRange = state.player.weapon.range;
-          state.player.attackCooldown = state.player.weapon.attackSpeed;
+          syncPlayerWeaponStats(state.player);
         }
       }
 
@@ -158,6 +162,12 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
       const scaleY = CANVAS_H / rect.height;
       state.mouse.x = (e.clientX - rect.left) * scaleX;
       state.mouse.y = (e.clientY - rect.top) * scaleY;
+      const aimDx = state.mouse.x - state.player.pos.x;
+      const aimDy = state.mouse.y - state.player.pos.y;
+      const aimLen = Math.hypot(aimDx, aimDy);
+      if (aimLen > 0.001) {
+        state.player.facing = { x: aimDx / aimLen, y: aimDy / aimLen };
+      }
     };
 
     const handleMouseDown = (e: MouseEvent) => {
@@ -198,6 +208,7 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
       updateGame(stateRef.current, dt);
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
       renderGame(ctx, stateRef.current, now / 1000);
+      networkRef.current.tick(stateRef.current, now);
 
       // Draw inventory overlay on canvas
       if (stateRef.current.showInventory) {
@@ -225,13 +236,14 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
       }
 
       // Pause overlay (drawn last so it sits on top)
-      if (stateRef.current.paused && !stateRef.current.gameOver) {
+      if (stateRef.current.paused && !stateRef.current.gameOver && !stateRef.current.levelUpChoices) {
         renderPauseOverlay(ctx);
       }
 
       // Throttle React state updates
       if (frameCount % 6 === 0) {
         onStateChange?.({ ...stateRef.current, player: { ...stateRef.current.player } });
+        setUiTick(tick => (tick + 1) % 100000);
       }
 
       rafRef.current = requestAnimationFrame(loop);
@@ -250,14 +262,74 @@ export default function GameCanvas({ heroClass, onStateChange }: GameCanvasProps
   }, [restartKey, onStateChange, restart]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={CANVAS_W}
-      height={CANVAS_H}
-      className="w-full max-w-[800px] rounded-lg border-2 border-border cursor-crosshair"
-      style={{ imageRendering: 'pixelated' }}
-      tabIndex={0}
-    />
+    <div className="w-full max-w-[800px] space-y-2">
+      <CoopPanel
+        state={stateRef.current}
+        onHost={() => networkRef.current.connect(stateRef.current)}
+        onJoin={(code) => networkRef.current.connect(stateRef.current, code)}
+        onDisconnect={() => networkRef.current.disconnect(stateRef.current)}
+      />
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_W}
+        height={CANVAS_H}
+        className="w-full border-2 border-primary/35 bg-black shadow-2xl shadow-black/45 cursor-crosshair"
+        style={{ imageRendering: 'pixelated' }}
+        tabIndex={0}
+      />
+    </div>
+  );
+}
+
+function CoopPanel({
+  state,
+  onHost,
+  onJoin,
+  onDisconnect,
+}: {
+  state: GameState;
+  onHost: () => void;
+  onJoin: (code: string) => void;
+  onDisconnect: () => void;
+}) {
+  const [code, setCode] = useState('');
+  const coop = state.coop;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border border-border bg-card/90 px-2 py-1.5 text-[11px] shadow-xl shadow-black/20">
+      <div className="flex items-center gap-2">
+        <span className={coop.connected ? 'font-semibold text-health' : coop.connecting ? 'font-semibold text-primary' : 'text-muted-foreground'}>
+          Co-op {coop.connected ? `online · ${coop.roomCode}` : coop.connecting ? 'connecting' : 'offline'}
+        </span>
+        {coop.connected && coop.role && (
+          <span className="text-muted-foreground">{coop.role === 'host' ? 'Host' : 'Guest'}</span>
+        )}
+        {coop.remotePlayers.length > 0 && (
+          <span className="text-muted-foreground">{coop.remotePlayers.length} ally online</span>
+        )}
+        {coop.error && <span className="text-destructive">{coop.error}</span>}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          value={code}
+          onChange={(event) => setCode(event.target.value.toUpperCase())}
+          placeholder="ROOM"
+          maxLength={6}
+          className="h-7 w-20 border border-border bg-background px-2 font-mono text-xs text-foreground outline-none"
+        />
+        <button type="button" onClick={onHost} className="h-7 border border-border bg-secondary px-2 text-foreground hover:border-primary">
+          Host
+        </button>
+        <button type="button" onClick={() => onJoin(code)} className="h-7 border border-border bg-secondary px-2 text-foreground hover:border-primary">
+          Join
+        </button>
+        {coop.connected && (
+          <button type="button" onClick={onDisconnect} className="h-7 border border-border bg-background px-2 text-muted-foreground hover:text-foreground">
+            Leave
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -298,8 +370,9 @@ function renderHelpOverlay(ctx: CanvasRenderingContext2D) {
         ['WASD / Arrows', 'Move'],
         ['Mouse', 'Aim'],
         ['Left Click', 'Attack'],
-        ['Space', 'Dodge roll'],
-        ['Shift', 'Class ability'],
+        ['Space', 'Class ability'],
+        ['Shift', 'Dodge roll'],
+        ['R', 'Swap weapons'],
       ],
     },
     {
@@ -379,6 +452,23 @@ function renderInventoryOverlay(ctx: CanvasRenderingContext2D, state: GameState)
   if (p.weapon.effect) {
     ctx.fillStyle = EFFECT_COLORS[p.weapon.effect];
     ctx.fillText(`✦ ${p.weapon.effect} (${Math.floor((p.weapon.effectChance || 0) * 100)}%)`, 130, 212);
+  }
+
+  ctx.fillStyle = '#aaa';
+  ctx.font = '13px Inter';
+  ctx.fillText('Secondary weapon (press R to swap):', 430, 150);
+  if (p.secondaryWeapon) {
+    const sw = p.secondaryWeapon;
+    ctx.fillStyle = RARITY_COLORS[sw.rarity];
+    ctx.font = 'bold 14px Inter';
+    ctx.fillText(sw.name, 430, 175);
+    ctx.fillStyle = '#999';
+    ctx.font = '11px Inter';
+    ctx.fillText(`DMG ${sw.damage} · SPD ${sw.attackSpeed} · ${sw.isRanged ? 'Ranged' : 'Melee'}`, 430, 195);
+  } else {
+    ctx.fillStyle = '#666';
+    ctx.font = '12px Inter';
+    ctx.fillText('Empty', 430, 175);
   }
 
   ctx.fillStyle = '#aaa';

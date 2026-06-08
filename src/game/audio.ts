@@ -21,6 +21,11 @@ type SfxName =
   | 'game_over'
   | 'shop_buy';
 
+type BrowserAudioWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
 class AudioManager {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -42,7 +47,9 @@ class AudioManager {
     if (typeof window === 'undefined') return null;
     if (!this.ctx) {
       try {
-        const Ctor = (window.AudioContext || (window as any).webkitAudioContext);
+        const audioWindow = window as BrowserAudioWindow;
+        const Ctor = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+        if (!Ctor) return null;
         this.ctx = new Ctor();
         this.master = this.ctx.createGain();
         this.master.gain.value = this.muted ? 0 : 0.7;

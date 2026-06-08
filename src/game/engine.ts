@@ -2,7 +2,7 @@ import {
   GameState, Player, Enemy, DungeonRoom, Dungeon, Door, Trap, Chest, Torch,
   Vector2, HeroClass, HERO_CONFIGS, EnemyType, WeaponRarity, LevelUpStat,
   generateWeapon, RARITY_COLORS, EFFECT_COLORS, ShopItem,
-  BossKind, BOSS_DEFS,
+  BossKind, BOSS_DEFS, ObjectiveKind, PowerUpType, RunObjective,
 } from './types';
 import { audio } from './audio';
 import { aggregateBonuses, canUnlockSkill, SKILL_TREES, SkillId } from './skills';
@@ -11,6 +11,8 @@ import { recordRun } from './highscore';
 const TILE = 32;
 const ROOM_W = 800;
 const ROOM_H = 600;
+const MAX_ROOMS_PER_DUNGEON = 11;
+let enemyIdCounter = 0;
 
 // ── Helpers ──
 
@@ -57,6 +59,145 @@ function notify(state: GameState, text: string, color: string) {
   state.notification = { text, timer: 2.5, color };
 }
 
+function nextEnemyId(type: EnemyType): string {
+  enemyIdCounter += 1;
+  return `${type}-${Date.now().toString(36)}-${enemyIdCounter.toString(36)}`;
+}
+
+function queueCoopDamage(state: GameState, enemy: Enemy, damage: number, crit?: boolean, effect?: 'fire' | 'ice' | 'poison' | 'lightning') {
+  if (!state.coop.connected || state.coop.role !== 'guest') return;
+  state.coop.outgoingEvents.push({
+    type: 'damageEnemy',
+    enemyId: enemy.id,
+    damage: Math.max(1, Math.floor(damage)),
+    crit,
+    effect,
+  });
+}
+
+function applyIncomingCoopEvents(state: GameState) {
+  if (!state.coop.connected || state.coop.role !== 'host' || state.coop.incomingEvents.length === 0) return;
+  const events = state.coop.incomingEvents.splice(0);
+  for (const event of events) {
+    if (event.type !== 'damageEnemy') continue;
+    const enemy = state.enemies.find(e => e.id === event.enemyId && e.alive);
+    if (!enemy) continue;
+    const damage = Math.max(1, Math.floor(event.damage));
+    enemy.hp -= damage;
+    enemy.flashTimer = 0.1;
+    spawnParticles(state, enemy.pos, '#e74c3c', 4);
+    spawnDamageNumber(state, enemy.pos, damage, event.crit ? '#f1c40f' : '#e74c3c', event.crit);
+    if (event.effect) {
+      if (event.effect === 'fire') applyStatusEffect(enemy, 'burn', 5);
+      else if (event.effect === 'ice') applyStatusEffect(enemy, 'freeze', 0);
+      else if (event.effect === 'poison') applyStatusEffect(enemy, 'poison', 4);
+    }
+  }
+  for (const event of events) {
+    if (event.type !== 'buyShopItem') continue;
+    const item = state.shopItems[event.itemIndex];
+    if (item && !item.sold) item.sold = true;
+  }
+}
+
+const POWER_UP_DEFS: Record<PowerUpType, { label: string; color: string; duration: number }> = {
+  fury: { label: 'Fury', color: '#ff8844', duration: 10 },
+  haste: { label: 'Haste', color: '#74c0fc', duration: 9 },
+  guard: { label: 'Guard', color: '#b8f7d4', duration: 12 },
+};
+
+function comboMultiplier(state: GameState): number {
+  return 1 + Math.min(state.combo.count, 25) * 0.02;
+}
+
+function hasPowerUp(state: GameState, type: PowerUpType): boolean {
+  return state.activePowerUps.some(p => p.type === type && p.timer > 0);
+}
+
+function addPowerUp(state: GameState, type: PowerUpType) {
+  const def = POWER_UP_DEFS[type];
+  const existing = state.activePowerUps.find(p => p.type === type);
+  if (existing) {
+    existing.timer = def.duration;
+    existing.duration = def.duration;
+  } else {
+    state.activePowerUps.push({ type, timer: def.duration, duration: def.duration });
+  }
+  notify(state, `${def.label} power-up!`, def.color);
+  spawnParticles(state, state.player.pos, def.color, 18);
+  audio.play('level_up');
+}
+
+function createRunObjectives(tier: number): RunObjective[] {
+  return [
+    {
+      id: `kills-${tier}`,
+      label: `Defeat ${12 + tier * 4} enemies`,
+      kind: 'kills',
+      target: 12 + tier * 4,
+      progress: 0,
+      rewardGold: 35 + tier * 10,
+      rewardXp: 40 + tier * 12,
+      completed: false,
+    },
+    {
+      id: `rooms-${tier}`,
+      label: 'Clear 3 combat rooms',
+      kind: 'rooms',
+      target: 3,
+      progress: 0,
+      rewardGold: 60 + tier * 15,
+      rewardXp: 70 + tier * 15,
+      completed: false,
+    },
+    {
+      id: `chests-${tier}`,
+      label: 'Open 2 chests',
+      kind: 'chests',
+      target: 2,
+      progress: 0,
+      rewardGold: 45 + tier * 12,
+      rewardXp: 35 + tier * 10,
+      completed: false,
+    },
+  ];
+}
+
+function progressObjective(state: GameState, kind: ObjectiveKind, amount = 1) {
+  for (const objective of state.objectives) {
+    if (objective.kind !== kind || objective.completed) continue;
+    objective.progress = Math.min(objective.target, objective.progress + amount);
+    if (objective.progress < objective.target) continue;
+
+    objective.completed = true;
+    state.player.gold += objective.rewardGold;
+    state.player.xp += objective.rewardXp;
+    notify(state, `Quest complete: ${objective.label}`, '#ffd43b');
+    spawnDamageNumber(state, state.player.pos, objective.rewardGold, '#f1c40f', false, 'QUEST');
+    audio.play('level_up');
+    if (state.player.xp >= state.player.xpToNext) {
+      triggerLevelUp(state);
+    }
+  }
+}
+
+function damagePlayer(state: GameState, amount: number): number {
+  const finalDamage = Math.max(1, Math.floor(amount * (hasPowerUp(state, 'guard') ? 0.55 : 1)));
+  state.player.hp -= finalDamage;
+  return finalDamage;
+}
+
+function blockGuestDoorTransition(state: GameState, door: Door): boolean {
+  if (state.coop.role !== 'guest') return false;
+  const p = state.player;
+  if (door.direction === 'e') p.pos.x = ROOM_W - TILE * 2;
+  else if (door.direction === 'w') p.pos.x = TILE * 2;
+  else if (door.direction === 's') p.pos.y = ROOM_H - TILE * 2;
+  else p.pos.y = TILE * 2;
+  p.vel = { x: 0, y: 0 };
+  return true;
+}
+
 // ── Enemy Creation ──
 
 function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1, bossKind?: BossKind): Enemy {
@@ -83,6 +224,7 @@ function createEnemy(type: EnemyType, x: number, y: number, tierMul = 1, bossKin
     : c.isRanged;
 
   return {
+    id: nextEnemyId(type),
     pos: { x, y }, vel: { x: 0, y: 0 },
     width: c.size, height: c.size,
     hp: Math.floor(c.hp * tierMul * hpMul), maxHp: Math.floor(c.hp * tierMul * hpMul),
@@ -239,52 +381,116 @@ function generateDungeonRoom(
   return room;
 }
 
-function generateDungeon(tier: number): Dungeon {
-  const themes: DungeonRoom['theme'][] = ['cave', 'crypt', 'fortress', 'shadow'];
-  const theme = themes[Math.min(tier - 1, 3)];
+function roomDirection(from: DungeonRoom, to: DungeonRoom): Door['direction'] | null {
+  const dx = to.gridX - from.gridX;
+  const dy = to.gridY - from.gridY;
+  if (dx === 1 && dy === 0) return 'e';
+  if (dx === -1 && dy === 0) return 'w';
+  if (dy === 1 && dx === 0) return 's';
+  if (dy === -1 && dx === 0) return 'n';
+  return null;
+}
 
-  const numCombat = 3 + Math.floor(Math.random() * 3);
-  const rooms: DungeonRoom[] = [];
+function addDoor(from: DungeonRoom, to: DungeonRoom) {
+  const dir = roomDirection(from, to);
+  if (!dir || from.doors.some(d => d.direction === dir)) return;
+  let doorX: number, doorY: number;
+  if (dir === 'e') { doorX = ROOM_W - TILE; doorY = ROOM_H / 2 - 16; }
+  else if (dir === 'w') { doorX = 0; doorY = ROOM_H / 2 - 16; }
+  else if (dir === 's') { doorX = ROOM_W / 2 - 16; doorY = ROOM_H - TILE; }
+  else { doorX = ROOM_W / 2 - 16; doorY = 0; }
 
-  rooms.push(generateDungeonRoom(0, 0, 0, 'start', tier, theme));
+  from.doors.push({
+    x: doorX, y: doorY, width: 32, height: 32,
+    direction: dir, locked: !from.cleared, targetRoom: to.id,
+  });
+}
 
-  let cx = 1;
-  const cy = 0;
-  for (let i = 0; i < numCombat; i++) {
-    const type = (i === Math.floor(numCombat / 2)) ? 'treasure' : 'combat';
-    rooms.push(generateDungeonRoom(rooms.length, cx, cy, type, tier, theme));
-    cx++;
+function connectAdjacentRooms(rooms: DungeonRoom[]) {
+  for (const room of rooms) room.doors = [];
+  for (const r of rooms) {
+    for (const other of rooms) {
+      if (r.id === other.id) continue;
+      if (Math.abs(other.gridX - r.gridX) + Math.abs(other.gridY - r.gridY) !== 1) continue;
+      addDoor(r, other);
+    }
+  }
+}
+
+function farthestFromStart(positions: Array<{ x: number; y: number }>): { x: number; y: number } {
+  return positions.reduce((best, pos) => (
+    Math.abs(pos.x) + Math.abs(pos.y) > Math.abs(best.x) + Math.abs(best.y) ? pos : best
+  ), positions[0]);
+}
+
+function generateRoomPositions(maxRooms: number): Array<{ x: number; y: number }> {
+  const positions: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }];
+  const occupied = new Set(['0,0']);
+  let cursor = { x: 0, y: 0 };
+  const dirs = [
+    { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+  ];
+
+  const mainPathLength = Math.max(4, Math.min(maxRooms - 3, 5 + Math.floor(Math.random() * 3)));
+  for (let i = 0; i < mainPathLength; i++) {
+    const options = dirs
+      .map(d => ({ x: cursor.x + d.x, y: cursor.y + d.y }))
+      .filter(p => !occupied.has(`${p.x},${p.y}`) && p.x >= 0 && Math.abs(p.y) <= 3);
+    const next = options.length > 0
+      ? options[Math.floor(Math.random() * options.length)]
+      : { x: cursor.x + 1, y: cursor.y };
+    cursor = next;
+    occupied.add(`${cursor.x},${cursor.y}`);
+    positions.push({ ...cursor });
   }
 
-  rooms.push(generateDungeonRoom(rooms.length, Math.floor(numCombat / 2) + 1, 1, 'shop', tier, theme));
-  rooms.push(generateDungeonRoom(rooms.length, cx, cy, 'boss', tier, theme));
-
-  // Connect rooms with doors
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i];
-    for (let j = 0; j < rooms.length; j++) {
-      if (i === j) continue;
-      const o = rooms[j];
-      const dx = o.gridX - r.gridX;
-      const dy = o.gridY - r.gridY;
-      if (Math.abs(dx) + Math.abs(dy) !== 1) continue;
-
-      let dir: Door['direction'];
-      let doorX: number, doorY: number;
-      if (dx === 1) { dir = 'e'; doorX = ROOM_W - TILE; doorY = ROOM_H / 2 - 16; }
-      else if (dx === -1) { dir = 'w'; doorX = 0; doorY = ROOM_H / 2 - 16; }
-      else if (dy === 1) { dir = 's'; doorX = ROOM_W / 2 - 16; doorY = ROOM_H - TILE; }
-      else { dir = 'n'; doorX = ROOM_W / 2 - 16; doorY = 0; }
-
-      if (!r.doors.find(d => d.direction === dir)) {
-        r.doors.push({
-          x: doorX, y: doorY, width: 32, height: 32,
-          direction: dir, locked: !r.cleared, targetRoom: j,
-        });
-      }
+  let attempts = 0;
+  while (positions.length < maxRooms && attempts < 80) {
+    attempts++;
+    const anchor = positions[Math.floor(Math.random() * positions.length)];
+    const branchDirs = [
+      { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+    ].sort(() => Math.random() - 0.5);
+    for (const d of branchDirs) {
+      const p = { x: anchor.x + d.x, y: anchor.y + d.y };
+      const key = `${p.x},${p.y}`;
+      if (occupied.has(key) || p.x < 0 || Math.abs(p.y) > 3) continue;
+      occupied.add(key);
+      positions.push(p);
+      break;
     }
   }
 
+  return positions;
+}
+
+export function generateDungeon(tier: number): Dungeon {
+  const themes: DungeonRoom['theme'][] = ['cave', 'crypt', 'fortress', 'shadow'];
+  const theme = themes[Math.min(tier - 1, 3)];
+  const maxRooms = Math.min(MAX_ROOMS_PER_DUNGEON, 7 + tier);
+  const positions = generateRoomPositions(maxRooms);
+  const bossPos = farthestFromStart(positions.filter(p => p.x !== 0 || p.y !== 0));
+  const nonSpecial = positions.filter(p => !(p.x === 0 && p.y === 0) && !(p.x === bossPos.x && p.y === bossPos.y));
+  const shopPos = nonSpecial
+    .slice()
+    .sort((a, b) => (Math.abs(a.x) + Math.abs(a.y)) - (Math.abs(b.x) + Math.abs(b.y)))
+    .find(p => Math.abs(p.y) > 0) ?? nonSpecial[0];
+  const treasurePos = nonSpecial
+    .slice()
+    .reverse()
+    .find(p => p !== shopPos) ?? null;
+  const rooms: DungeonRoom[] = [];
+
+  for (const pos of positions) {
+    let type: DungeonRoom['type'] = 'combat';
+    if (pos.x === 0 && pos.y === 0) type = 'start';
+    else if (pos.x === bossPos.x && pos.y === bossPos.y) type = 'boss';
+    else if (shopPos && pos.x === shopPos.x && pos.y === shopPos.y) type = 'shop';
+    else if (treasurePos && pos.x === treasurePos.x && pos.y === treasurePos.y) type = 'treasure';
+    rooms.push(generateDungeonRoom(rooms.length, pos.x, pos.y, type, tier, theme));
+  }
+
+  connectAdjacentRooms(rooms);
   return { rooms, currentRoomId: 0, tier };
 }
 
@@ -299,7 +505,7 @@ function spawnLoot(state: GameState, pos: Vector2, goldValue: number, tier: numb
   if (Math.random() < 0.25) {
     state.loot.push({
       pos: { x: pos.x + (Math.random() - 0.5) * 30, y: pos.y + (Math.random() - 0.5) * 30 },
-      type: 'health', value: 20 + tier * 5, rarity: 'common', lifetime: 20, bobOffset: Math.random() * Math.PI * 2,
+      type: 'health', value: 10, rarity: 'common', lifetime: 20, bobOffset: Math.random() * Math.PI * 2,
     });
   }
 
@@ -307,6 +513,20 @@ function spawnLoot(state: GameState, pos: Vector2, goldValue: number, tier: numb
     state.loot.push({
       pos: { x: pos.x + (Math.random() - 0.5) * 30, y: pos.y + (Math.random() - 0.5) * 30 },
       type: 'mana', value: 15 + tier * 5, rarity: 'common', lifetime: 20, bobOffset: Math.random() * Math.PI * 2,
+    });
+  }
+
+  if (Math.random() < 0.06) {
+    const powerUps: PowerUpType[] = ['fury', 'haste', 'guard'];
+    const powerUp = powerUps[Math.floor(Math.random() * powerUps.length)];
+    state.loot.push({
+      pos: { x: pos.x + (Math.random() - 0.5) * 24, y: pos.y + (Math.random() - 0.5) * 24 },
+      type: 'powerup',
+      value: 0,
+      rarity: powerUp === 'fury' ? 'rare' : 'common',
+      lifetime: 18,
+      bobOffset: Math.random() * Math.PI * 2,
+      powerUp,
     });
   }
 
@@ -395,6 +615,7 @@ function createPlayer(heroClass: HeroClass): Player {
     heroClass,
     abilityTimer: 0, abilityCooldown: 3,
     weapon: { ...cfg.startWeapon },
+    secondaryWeapon: null,
     inventory: [],
     statusEffects: [],
     killCount: 0,
@@ -443,6 +664,22 @@ export function initGameState(heroClass: HeroClass): GameState {
     showShop: false,
     notification: null,
     time: 0,
+    combo: { count: 0, timer: 0, best: 0 },
+    activePowerUps: [],
+    objectives: createRunObjectives(dungeon.tier),
+    coop: {
+      enabled: false,
+      connected: false,
+      connecting: false,
+      role: null,
+      roomCode: null,
+      playerId: null,
+      error: null,
+      remotePlayers: [],
+      worldVersion: 0,
+      outgoingEvents: [],
+      incomingEvents: [],
+    },
     levelUpChoices: null,
     showSkillTree: false,
     showMap: false,
@@ -601,6 +838,26 @@ export function unlockSkill(state: GameState, skillId: SkillId): boolean {
 
 // ── Boss patterns ──
 
+export function syncPlayerWeaponStats(p: Player): void {
+  p.attackDamage = p.weapon.damage;
+  p.attackRange = p.weapon.range;
+  p.attackCooldown = p.weapon.attackSpeed;
+}
+
+function swapWeapons(state: GameState): void {
+  const p = state.player;
+  if (!p.secondaryWeapon) {
+    notify(state, 'No secondary weapon equipped', '#888');
+    return;
+  }
+  const old = p.weapon;
+  p.weapon = p.secondaryWeapon;
+  p.secondaryWeapon = old;
+  syncPlayerWeaponStats(p);
+  notify(state, `Swapped to ${p.weapon.name}`, RARITY_COLORS[p.weapon.rarity]);
+  audio.play('pickup_weapon');
+}
+
 function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): void {
   const p = state.player;
   const bdef = e.bossKind ? BOSS_DEFS[e.bossKind] : null;
@@ -632,12 +889,12 @@ function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): v
     e.pos.x += e.vel.x * dt;
     e.pos.y += e.vel.y * dt;
     if (d < 36 && p.iFrames <= 0) {
-      p.hp -= e.damage;
+      const taken = damagePlayer(state, e.damage);
       p.iFrames = 0.6;
       const kb = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
       p.pos.x += kb.x * 60; p.pos.y += kb.y * 60;
       spawnParticles(state, p.pos, '#ff7733', 10);
-      spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
+      spawnDamageNumber(state, p.pos, taken, '#ff6b6b');
       state.screenShake = 0.25;
       audio.play('player_hurt');
       e.chargeTimer = 0;
@@ -670,9 +927,9 @@ function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): v
       // Melee contact
       if (d < 30 && e.attackTimer <= 0 && p.iFrames <= 0) {
         e.attackTimer = e.attackCooldown;
-        p.hp -= e.damage;
+        const taken = damagePlayer(state, e.damage);
         p.iFrames = 0.5;
-        spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
+        spawnDamageNumber(state, p.pos, taken, '#ff6b6b');
         audio.play('player_hurt');
       }
       break;
@@ -763,9 +1020,9 @@ function updateBossPattern(state: GameState, e: Enemy, dt: number, d: number): v
         spawnParticles(state, e.pos, bdef.glow, 18);
         // Immediate strike
         if (p.iFrames <= 0) {
-          p.hp -= e.damage;
+          const taken = damagePlayer(state, e.damage);
           p.iFrames = 0.5;
-          spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
+          spawnDamageNumber(state, p.pos, taken, '#ff6b6b');
           state.screenShake = 0.18;
           audio.play('player_hurt');
         }
@@ -809,6 +1066,21 @@ export function updateGame(state: GameState, dt: number): void {
 
   const p = state.player;
   const room = state.room;
+  applyIncomingCoopEvents(state);
+  const combatLocked = (room.type === 'combat' || room.type === 'boss') && state.enemies.some(e => e.alive);
+  for (const door of room.doors) {
+    door.locked = !room.cleared || combatLocked;
+  }
+
+  state.combo.timer -= dt;
+  if (state.combo.timer <= 0) {
+    state.combo.count = 0;
+    state.combo.timer = 0;
+  }
+  for (let i = state.activePowerUps.length - 1; i >= 0; i--) {
+    state.activePowerUps[i].timer -= dt;
+    if (state.activePowerUps[i].timer <= 0) state.activePowerUps.splice(i, 1);
+  }
 
   // ── Dodge Roll ──
   p.dodgeTimer -= dt;
@@ -832,15 +1104,17 @@ export function updateGame(state: GameState, dt: number): void {
 
   if (dx !== 0 || dy !== 0) {
     const dir = normalize({ x: dx, y: dy });
-    const speed = p.dodgeTimer > 0 ? p.speed * 2.5 : p.speed;
+    const speedBoost = hasPowerUp(state, 'haste') ? 1.28 : 1;
+    const speed = (p.dodgeTimer > 0 ? p.speed * 2.5 : p.speed) * speedBoost;
     p.vel.x = dir.x * speed;
     p.vel.y = dir.y * speed;
     p.facing = dir;
   } else {
     if (p.dodgeTimer > 0) {
       // Continue dodge in facing direction
-      p.vel.x = p.facing.x * p.speed * 2.5;
-      p.vel.y = p.facing.y * p.speed * 2.5;
+      const speedBoost = hasPowerUp(state, 'haste') ? 1.28 : 1;
+      p.vel.x = p.facing.x * p.speed * 2.5 * speedBoost;
+      p.vel.y = p.facing.y * p.speed * 2.5 * speedBoost;
     } else {
       p.vel.x = 0;
       p.vel.y = 0;
@@ -853,6 +1127,20 @@ export function updateGame(state: GameState, dt: number): void {
 
   p.pos.x += p.vel.x * dt;
   p.pos.y += p.vel.y * dt;
+
+  // Door transitions must run before boundary-wall collision because doors are
+  // drawn inside the wall band. Locked doors still block because they skip this.
+  for (const door of room.doors) {
+    if (door.locked) continue;
+    if (aabbCollision(p.pos.x - p.width / 2, p.pos.y - p.height / 2, p.width, p.height,
+      door.x, door.y, door.width, door.height)) {
+      if (blockGuestDoorTransition(state, door)) return;
+      state.transitionTimer = 0.3;
+      state.transitionDirection = door.direction;
+      transitionToRoom(state, door.targetRoom, door.direction);
+      return;
+    }
+  }
 
   // Wall collision
   for (const w of room.walls) {
@@ -872,6 +1160,7 @@ export function updateGame(state: GameState, dt: number): void {
     if (door.locked) continue;
     if (aabbCollision(p.pos.x - p.width / 2, p.pos.y - p.height / 2, p.width, p.height,
       door.x, door.y, door.width, door.height)) {
+      if (blockGuestDoorTransition(state, door)) return;
       state.transitionTimer = 0.3;
       state.transitionDirection = door.direction;
       transitionToRoom(state, door.targetRoom, door.direction);
@@ -884,6 +1173,11 @@ export function updateGame(state: GameState, dt: number): void {
     state.keys.delete('i');
     state.keys.delete('tab');
     state.showInventory = !state.showInventory;
+  }
+
+  if (state.keys.has('r')) {
+    state.keys.delete('r');
+    swapWeapons(state);
   }
 
   // ── Chest Interaction ──
@@ -902,6 +1196,7 @@ export function updateGame(state: GameState, dt: number): void {
       if (!chest.lootSpawned) {
         chest.lootSpawned = true;
         spawnChestLoot(state, chest, state.dungeon.tier);
+        progressObjective(state, 'chests');
         notify(state, `Opened ${chest.rarity} chest!`, RARITY_COLORS[chest.rarity]);
       }
     }
@@ -930,13 +1225,14 @@ export function updateGame(state: GameState, dt: number): void {
     const critChance = 0.15 + sb.critChance;
     const critMul = 2 + sb.critDamage;
     const procMul = 1 + sb.effectChanceMul;
+    const powerDamageMul = hasPowerUp(state, 'fury') ? 1.35 : 1;
 
     if (w.isRanged) {
       const speed = 400;
       state.projectiles.push({
         pos: { x: p.pos.x, y: p.pos.y },
         vel: { x: dir.x * speed, y: dir.y * speed },
-        damage: w.damage + p.attackDamage * 0.5,
+        damage: (w.damage + p.attackDamage * 0.5) * powerDamageMul,
         radius: 5, lifetime: 1.5, fromPlayer: true,
         color: w.effect ? EFFECT_COLORS[w.effect] : undefined,
         effect: w.effect,
@@ -952,8 +1248,9 @@ export function updateGame(state: GameState, dt: number): void {
         if (!e.alive) continue;
         if (dist(attackPos, e.pos) < w.range + e.width / 2) {
           const isCrit = Math.random() < critChance;
-          const dmg = Math.floor((isCrit ? critMul : 1) * (w.damage + p.attackDamage * 0.3));
+          const dmg = Math.floor((isCrit ? critMul : 1) * (w.damage + p.attackDamage * 0.3) * powerDamageMul);
           e.hp -= dmg;
+          queueCoopDamage(state, e, dmg, isCrit, w.effect);
           totalDealt += dmg;
           e.flashTimer = 0.1;
           e.knockbackTimer = 0.15;
@@ -973,6 +1270,7 @@ export function updateGame(state: GameState, dt: number): void {
               for (const e2 of state.enemies) {
                 if (e2 === e || !e2.alive || dist(e.pos, e2.pos) > 100) continue;
                 e2.hp -= Math.floor(dmg * 0.4);
+                queueCoopDamage(state, e2, Math.floor(dmg * 0.4), false);
                 spawnParticles(state, e2.pos, '#ffd43b', 4);
                 spawnDamageNumber(state, e2.pos, Math.floor(dmg * 0.4), '#ffd43b');
               }
@@ -1002,6 +1300,7 @@ export function updateGame(state: GameState, dt: number): void {
         if (!e.alive || dist(p.pos, e.pos) > 80) continue;
         const dmg = Math.floor(p.attackDamage * 2);
         e.hp -= dmg;
+        queueCoopDamage(state, e, dmg, true);
         e.flashTimer = 0.15;
         const kb = normalize({ x: e.pos.x - p.pos.x, y: e.pos.y - p.pos.y });
         e.vel = { x: kb.x * 400, y: kb.y * 400 };
@@ -1015,6 +1314,7 @@ export function updateGame(state: GameState, dt: number): void {
         if (!e.alive || dist(p.pos, e.pos) > 120) continue;
         const dmg = Math.floor(p.attackDamage * 1.5);
         e.hp -= dmg;
+        queueCoopDamage(state, e, dmg, false, 'ice');
         applyStatusEffect(e, 'freeze', 0);
         e.flashTimer = 0.2;
         spawnDamageNumber(state, e.pos, dmg, '#74c0fc');
@@ -1039,6 +1339,7 @@ export function updateGame(state: GameState, dt: number): void {
         if (!e.alive || dist(p.pos, e.pos) > 60) continue;
         const dmg = Math.floor(p.attackDamage * 3);
         e.hp -= dmg;
+        queueCoopDamage(state, e, dmg, true);
         e.flashTimer = 0.15;
         spawnDamageNumber(state, e.pos, dmg, '#b197fc', true);
       }
@@ -1081,10 +1382,13 @@ export function updateGame(state: GameState, dt: number): void {
           const isCrit = Math.random() < 0.1;
           const dmg = Math.floor((isCrit ? 2 : 1) * proj.damage);
           e.hp -= dmg;
+          queueCoopDamage(state, e, dmg, isCrit, proj.effect);
           e.flashTimer = 0.1;
-          e.knockbackTimer = 0.1;
-          const kb = normalize({ x: e.pos.x - proj.pos.x, y: e.pos.y - proj.pos.y });
-          e.vel = { x: kb.x * 200, y: kb.y * 200 };
+          if (e.type !== 'boss') {
+            e.knockbackTimer = 0.1;
+            const kb = normalize({ x: e.pos.x - proj.pos.x, y: e.pos.y - proj.pos.y });
+            e.vel = { x: kb.x * 200, y: kb.y * 200 };
+          }
           spawnParticles(state, e.pos, proj.color || '#e74c3c', 4);
           spawnDamageNumber(state, e.pos, dmg, isCrit ? '#f1c40f' : '#e74c3c', isCrit);
 
@@ -1100,10 +1404,10 @@ export function updateGame(state: GameState, dt: number): void {
       }
     } else {
       if (p.iFrames <= 0 && dist(proj.pos, p.pos) < proj.radius + p.width / 2) {
-        p.hp -= proj.damage;
+        const taken = damagePlayer(state, proj.damage);
         p.iFrames = 0.5;
         spawnParticles(state, p.pos, '#e74c3c', 6);
-        spawnDamageNumber(state, p.pos, proj.damage, '#ff6b6b');
+        spawnDamageNumber(state, p.pos, taken, '#ff6b6b');
         state.screenShake = 0.12;
         audio.play('player_hurt');
         state.projectiles.splice(i, 1);
@@ -1130,17 +1434,11 @@ export function updateGame(state: GameState, dt: number): void {
 
     if (trap.active && (trap.type === 'spikes' || trap.type === 'fire_vent')) {
       if (p.iFrames <= 0 && dist(p.pos, trap.pos) < trap.width) {
-        p.hp -= Math.floor(trap.damage * 0.3);
+        const trapDamage = Math.floor(trap.damage * 0.3);
+        const taken = damagePlayer(state, trapDamage);
         p.iFrames = 0.3;
-        spawnDamageNumber(state, p.pos, Math.floor(trap.damage * 0.3), '#e74c3c');
+        spawnDamageNumber(state, p.pos, taken, '#e74c3c');
         if (trap.type === 'fire_vent') applyStatusEffect(p, 'burn', 3);
-      }
-      for (const e of state.enemies) {
-        if (!e.alive || e.knockbackTimer > 0) continue;
-        if (dist(e.pos, trap.pos) < trap.width) {
-          e.hp -= Math.floor(trap.damage * 0.3);
-          e.flashTimer = 0.1;
-        }
       }
     }
   }
@@ -1224,7 +1522,7 @@ export function updateGame(state: GameState, dt: number): void {
     // Boss pattern AI (overrides generic)
     if (e.type === 'boss' && e.bossKind) {
       updateBossPattern(state, e, dt, d);
-      continue;
+      if (e.hp > 0) continue;
     }
 
     if (e.isRanged) {
@@ -1271,13 +1569,13 @@ export function updateGame(state: GameState, dt: number): void {
 
         if (d < 30 && e.attackTimer <= 0 && p.iFrames <= 0) {
           e.attackTimer = e.attackCooldown;
-          p.hp -= e.damage;
+          const taken = damagePlayer(state, e.damage);
           p.iFrames = 0.5;
           const kb = normalize({ x: p.pos.x - e.pos.x, y: p.pos.y - e.pos.y });
           p.pos.x += kb.x * 30;
           p.pos.y += kb.y * 30;
           spawnParticles(state, p.pos, '#e74c3c', 6);
-          spawnDamageNumber(state, p.pos, e.damage, '#ff6b6b');
+          spawnDamageNumber(state, p.pos, taken, '#ff6b6b');
           state.screenShake = 0.12;
           audio.play('player_hurt');
         }
@@ -1299,7 +1597,12 @@ export function updateGame(state: GameState, dt: number): void {
     if (e.hp <= 0) {
       e.alive = false;
       p.killCount++;
+      state.combo.count++;
+      state.combo.best = Math.max(state.combo.best, state.combo.count);
+      state.combo.timer = 4;
+      progressObjective(state, 'kills');
       if (e.type === 'boss') {
+        progressObjective(state, 'bosses');
         const bdef = e.bossKind ? BOSS_DEFS[e.bossKind] : null;
         const cBase = bdef ? bdef.color : '#9b59b6';
         const cGlow = bdef ? bdef.glow : '#d465ff';
@@ -1353,7 +1656,7 @@ export function updateGame(state: GameState, dt: number): void {
       }
       spawnLoot(state, e.pos, e.goldValue, state.dungeon.tier);
       const sb = aggregateBonuses(p.heroClass, new Set(p.unlockedSkills));
-      p.xp += Math.floor(e.xpValue * (1 + sb.xpMul));
+      p.xp += Math.floor(e.xpValue * (1 + sb.xpMul) * comboMultiplier(state));
       audio.play('enemy_death');
 
       if (p.xp >= p.xpToNext) {
@@ -1376,6 +1679,7 @@ export function updateGame(state: GameState, dt: number): void {
       }
     }
     notify(state, 'ROOM CLEARED!', '#f1c40f');
+    progressObjective(state, 'rooms');
     p.hp = Math.min(p.maxHp, p.hp + Math.floor(p.maxHp * 0.15));
 
     // Boss-room clear is now driven by the bossOutro cinematic (set on boss death).
@@ -1407,6 +1711,9 @@ export function updateGame(state: GameState, dt: number): void {
       state.projectiles = [];
       state.loot = [];
       state.shopItems = [];
+      state.objectives = createRunObjectives(nextTier);
+      state.combo = { count: 0, timer: 0, best: state.combo.best };
+      state.activePowerUps = [];
       p.pos = { x: ROOM_W / 2, y: ROOM_H / 2 };
       p.hp = p.maxHp;
       p.mana = p.maxMana;
@@ -1444,8 +1751,14 @@ export function updateGame(state: GameState, dt: number): void {
         p.manaPotions += 1;
         notify(state, 'Mana Potion (F to use)', '#74c0fc');
         audio.play('pickup_health');
+      } else if (l.type === 'powerup' && l.powerUp) {
+        addPowerUp(state, l.powerUp);
       } else if (l.type === 'weapon' && l.weapon) {
-        if (p.inventory.length < 8) {
+        if (!p.secondaryWeapon) {
+          p.secondaryWeapon = l.weapon;
+          notify(state, `Secondary: ${l.weapon.name} (${l.weapon.rarity})`, RARITY_COLORS[l.weapon.rarity]);
+          audio.play('pickup_weapon');
+        } else if (p.inventory.length < 8) {
           p.inventory.push(l.weapon);
           notify(state, `Found: ${l.weapon.name} (${l.weapon.rarity})`, RARITY_COLORS[l.weapon.rarity]);
           audio.play('pickup_weapon');

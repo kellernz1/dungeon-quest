@@ -1,7 +1,21 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { GameState, HERO_CONFIGS, RARITY_COLORS, EFFECT_COLORS } from '@/game/types';
 import { audio } from '@/game/audio';
-import { Heart, Zap, Coins, Shield, Star, Skull, Swords, Volume2, VolumeX } from 'lucide-react';
+import {
+  BadgeInfo,
+  Coins,
+  Heart,
+  ListChecks,
+  Shield,
+  Skull,
+  Sparkles,
+  Star,
+  Swords,
+  Volume2,
+  VolumeX,
+  Zap,
+} from 'lucide-react';
 
 interface GameHUDProps {
   state: GameState | null;
@@ -10,142 +24,167 @@ interface GameHUDProps {
 export default function GameHUD({ state }: GameHUDProps) {
   const [muted, setMuted] = useState(audio.isMuted());
   if (!state) return null;
-  const { player: p, dungeon } = state;
+
+  const { player: p, dungeon, room } = state;
   const cfg = HERO_CONFIGS[p.heroClass];
-  const room = state.room;
+  const rarityColor = RARITY_COLORS[p.weapon.rarity];
 
   const handleToggleMute = () => {
     audio.unlock();
     setMuted(audio.toggle());
   };
 
-  const rarityColor = RARITY_COLORS[p.weapon.rarity];
-
   return (
-    <div className="w-full max-w-[800px] space-y-2">
-      {/* Top bar */}
-      <div className="flex items-center justify-between gap-3 rounded-lg bg-card border border-border p-2.5">
-        {/* Hero info */}
-        <div className="flex items-center gap-2.5 shrink-0">
+    <section className="w-full max-w-[800px] space-y-2">
+      <div className="grid grid-cols-1 gap-2 border border-border bg-card/92 p-2 shadow-xl shadow-black/20 lg:grid-cols-[180px_1fr_190px_auto]">
+        <div className="flex items-center gap-2.5">
           <div
-            className="w-9 h-9 rounded-full flex items-center justify-center border-2"
-            style={{ backgroundColor: cfg.color, borderColor: cfg.color }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center border"
+            style={{ backgroundColor: `${cfg.color}30`, borderColor: `${cfg.color}88`, color: cfg.color }}
           >
-            <Swords className="w-4 h-4 text-primary-foreground" />
+            <Swords className="h-5 w-5" />
           </div>
-          <div>
-            <p className="font-display text-xs font-bold text-foreground">{cfg.name} Lv.{p.level}</p>
-            <p className="text-[10px] text-muted-foreground">{p.killCount} kills</p>
-          </div>
-        </div>
-
-        {/* Bars */}
-        <div className="flex-1 space-y-1 max-w-[240px]">
-          <div className="flex items-center gap-1.5">
-            <Heart className="w-3 h-3 text-health shrink-0" />
-            <div className="flex-1 h-2.5 rounded-full bg-secondary overflow-hidden">
-              <div className="h-full rounded-full bg-health transition-all duration-200" style={{ width: `${(p.hp / p.maxHp) * 100}%` }} />
-            </div>
-            <span className="text-[10px] text-muted-foreground w-12 text-right">{p.hp}/{p.maxHp}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Zap className="w-3 h-3 text-mana shrink-0" />
-            <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
-              <div className="h-full rounded-full bg-mana transition-all duration-200" style={{ width: `${(p.mana / p.maxMana) * 100}%` }} />
-            </div>
-            <span className="text-[10px] text-muted-foreground w-12 text-right">{Math.floor(p.mana)}/{p.maxMana}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Star className="w-3 h-3 text-xp shrink-0" />
-            <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-              <div className="h-full rounded-full bg-xp transition-all duration-200" style={{ width: `${(p.xp / p.xpToNext) * 100}%` }} />
-            </div>
-            <span className="text-[10px] text-muted-foreground w-12 text-right">{p.xp}/{p.xpToNext}</span>
+          <div className="min-w-0">
+            <p className="truncate font-display text-sm font-bold text-foreground">
+              {cfg.name} Lv.{p.level}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{p.killCount} defeats</p>
           </div>
         </div>
 
-        {/* Weapon */}
-        <div className="shrink-0 rounded-md border px-2 py-1.5 text-center" style={{ borderColor: rarityColor + '66' }}>
-          <p className="text-[10px] font-bold" style={{ color: rarityColor }}>{p.weapon.name}</p>
-          <p className="text-[9px] text-muted-foreground">
+        <div className="grid min-w-0 gap-1.5">
+          <Meter icon={<Heart className="h-3.5 w-3.5 text-health" />} value={p.hp} max={p.maxHp} color="bg-health" />
+          <Meter icon={<Zap className="h-3.5 w-3.5 text-mana" />} value={p.mana} max={p.maxMana} color="bg-mana" />
+          <Meter icon={<Star className="h-3.5 w-3.5 text-xp" />} value={p.xp} max={p.xpToNext} color="bg-xp" compact />
+        </div>
+
+        <div className="min-w-0 border border-border bg-background/50 px-2 py-1.5">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" style={{ color: rarityColor }} />
+            <p className="truncate text-xs font-bold" style={{ color: rarityColor }}>
+              {p.weapon.name}
+            </p>
+          </div>
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
             DMG {p.weapon.damage} · {p.weapon.isRanged ? 'Ranged' : 'Melee'}
-            {p.weapon.effect && <span style={{ color: EFFECT_COLORS[p.weapon.effect] }}> ✦ {p.weapon.effect}</span>}
+            {p.weapon.effect && (
+              <span style={{ color: EFFECT_COLORS[p.weapon.effect] }}>
+                {' '}· {p.weapon.effect}
+              </span>
+            )}
+          </p>
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+            R swap: {p.secondaryWeapon ? p.secondaryWeapon.name : 'empty'}
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="flex flex-col gap-1 text-[11px] shrink-0">
-          <div className="flex items-center gap-1">
-            <Coins className="w-3 h-3 text-xp" />
-            <span className="text-foreground font-medium">{p.gold}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Shield className="w-3 h-3 text-muted-foreground" />
-            <span className="text-foreground font-medium">T{dungeon.tier}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Skull className="w-3 h-3 text-muted-foreground" />
-            <span className="text-foreground font-medium">{state.enemies.length}</span>
-          </div>
+        <div className="flex items-center justify-between gap-2 lg:justify-end">
+          <Stat icon={<Coins className="h-3.5 w-3.5 text-xp" />} value={p.gold} label="gold" />
+          <Stat icon={<Shield className="h-3.5 w-3.5 text-muted-foreground" />} value={`T${dungeon.tier}`} label="tier" />
+          <Stat icon={<Skull className="h-3.5 w-3.5 text-muted-foreground" />} value={state.enemies.length} label="foes" />
+          <button
+            onClick={handleToggleMute}
+            aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+            title={muted ? 'Unmute audio' : 'Mute audio'}
+            className="flex h-8 w-8 items-center justify-center border border-border bg-secondary text-foreground transition hover:border-primary/60"
+          >
+            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
         </div>
-
-        {/* Potions */}
-        <div className="flex flex-col gap-1 text-[11px] shrink-0">
-          <div className="flex items-center gap-1" title="Q to use Health Potion">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-health" />
-            <span className="text-foreground font-medium">{p.healthPotions}</span>
-            <kbd className="px-1 rounded bg-secondary border border-border font-mono text-[9px]">Q</kbd>
-          </div>
-          <div className="flex items-center gap-1" title="F to use Mana Potion">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-mana" />
-            <span className="text-foreground font-medium">{p.manaPotions}</span>
-            <kbd className="px-1 rounded bg-secondary border border-border font-mono text-[9px]">F</kbd>
-          </div>
-        </div>
-
-        {/* Mute toggle */}
-        <button
-          onClick={handleToggleMute}
-          aria-label={muted ? 'Unmute audio' : 'Mute audio'}
-          title={muted ? 'Unmute (audio off)' : 'Mute (audio on)'}
-          className="shrink-0 w-8 h-8 rounded-md border border-border bg-secondary hover:bg-accent transition-colors flex items-center justify-center text-foreground"
-        >
-          {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-        </button>
       </div>
 
-      {/* Bottom controls */}
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
-        <div className="flex items-center gap-3">
-          <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">WASD</kbd> Move
-          </span>
-          <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">CLICK</kbd> Attack
-          </span>
-          <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">SPACE</kbd>
-            {' '}Ability {p.abilityTimer > 0 ? `(${p.abilityTimer.toFixed(1)}s)` : '✓'}
-          </span>
-          <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">SHIFT</kbd> Dodge
-          </span>
-          <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">E</kbd> Interact
-          </span>
-          <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">TAB</kbd> Inv ({p.inventory.length}/8)
-          </span>
-          <span className={p.skillPoints > 0 ? 'text-xp font-semibold animate-pulse' : ''}>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">K</kbd> Skills
-            {p.skillPoints > 0 && ` (${p.skillPoints}!)`}
-          </span>
-          <span>
-            <kbd className="px-1 py-0.5 rounded bg-secondary border border-border font-mono text-foreground text-[9px]">M</kbd> Map
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border border-border bg-background/70 px-2 py-1.5 text-[10px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip label="Q" value={p.healthPotions} tone="health" />
+          <Chip label="F" value={p.manaPotions} tone="mana" />
+          {state.combo.count > 1 && <span className="font-semibold text-primary">Combo x{state.combo.count}</span>}
+          {state.activePowerUps.map((powerUp) => (
+            <span key={powerUp.type} className="border border-primary/35 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+              {powerUp.type} {Math.ceil(powerUp.timer)}s
+            </span>
+          ))}
+          <span className={p.skillPoints > 0 ? 'font-semibold text-xp' : ''}>Skills {p.skillPoints}</span>
+          <span>R Swap</span>
+          <span>Inventory {p.inventory.length}/8</span>
+          <span className="capitalize">{room.theme} · {room.type}</span>
         </div>
-        <span className="capitalize">{room.theme} · {room.type} room</span>
+        <div className="flex items-center gap-1.5">
+          <BadgeInfo className="h-3.5 w-3.5 text-primary" />
+          <span>H opens the command sheet</span>
+        </div>
       </div>
+
+      <div className="grid gap-1.5 border border-border bg-card/80 p-2 text-[10px] shadow-xl shadow-black/10 sm:grid-cols-3">
+        {state.objectives.map((objective) => (
+          <div key={objective.id} className="flex min-w-0 items-center gap-2 border border-border bg-background/55 px-2 py-1.5">
+            <ListChecks className={objective.completed ? 'h-3.5 w-3.5 shrink-0 text-health' : 'h-3.5 w-3.5 shrink-0 text-primary'} />
+            <div className="min-w-0 flex-1">
+              <p className={objective.completed ? 'truncate font-semibold text-health' : 'truncate text-foreground'}>
+                {objective.label}
+              </p>
+              <div className="mt-1 h-1 overflow-hidden bg-secondary">
+                <div
+                  className={objective.completed ? 'h-full bg-health' : 'h-full bg-primary'}
+                  style={{ width: `${(objective.progress / objective.target) * 100}%` }}
+                />
+              </div>
+            </div>
+            <span className="font-mono text-muted-foreground">
+              {objective.progress}/{objective.target}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Meter({
+  icon,
+  value,
+  max,
+  color,
+  compact = false,
+}: {
+  icon: ReactNode;
+  value: number;
+  max: number;
+  color: string;
+  compact?: boolean;
+}) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {icon}
+      <div className={compact ? 'h-1.5 flex-1 overflow-hidden bg-secondary' : 'h-2.5 flex-1 overflow-hidden bg-secondary'}>
+        <div className={`h-full ${color} transition-all duration-200`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-16 text-right font-mono text-[10px] text-muted-foreground">
+        {Math.floor(value)}/{max}
+      </span>
     </div>
+  );
+}
+
+function Stat({ icon, value, label }: { icon: ReactNode; value: string | number; label: string }) {
+  return (
+    <div className="grid min-w-10 place-items-center border border-border bg-secondary px-2 py-1">
+      <div className="flex items-center gap-1">
+        {icon}
+        <span className="font-mono text-xs font-semibold text-foreground">{value}</span>
+      </div>
+      <span className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+function Chip({ label, value, tone }: { label: string; value: number; tone: 'health' | 'mana' }) {
+  return (
+    <span className="inline-flex items-center gap-1 border border-border bg-secondary px-2 py-0.5">
+      <span className={tone === 'health' ? 'h-2 w-2 bg-health' : 'h-2 w-2 bg-mana'} />
+      <span className="font-mono text-foreground">{label}</span>
+      <span>{value}</span>
+    </span>
   );
 }

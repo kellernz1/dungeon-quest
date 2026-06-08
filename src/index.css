@@ -65,9 +65,44 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', sans-serif;
+    min-width: 320px;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Cinzel', serif;
+  }
+}
+
+@layer components {
+  .dungeon-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 50% 48%, rgba(232, 153, 57, 0.12), transparent 34%),
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(135deg, rgba(122, 37, 31, 0.22), transparent 42%),
+      hsl(var(--background));
+    background-size: auto, 32px 32px, 32px 32px, auto, auto;
+  }
+
+  .dungeon-backdrop::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 0 19%, rgba(0, 0, 0, 0.28) 19% 20%, transparent 20% 80%, rgba(0, 0, 0, 0.28) 80% 81%, transparent 81%),
+      linear-gradient(transparent 0 18%, rgba(0, 0, 0, 0.24) 18% 19%, transparent 19% 81%, rgba(0, 0, 0, 0.24) 81% 82%, transparent 82%);
+    background-size: 220px 180px;
+    opacity: 0.65;
+  }
+
+  .dungeon-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, transparent 0 42%, rgba(0, 0, 0, 0.72) 100%);
   }
 }

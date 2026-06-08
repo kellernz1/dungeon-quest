@@ -58,7 +58,7 @@ export interface SkillBonus {
 }
 
 /** Aggregated bonuses derived from a set of unlocked skills. */
-export interface AggregatedBonuses extends Required<Omit<SkillBonus, never>> {}
+export type AggregatedBonuses = Required<SkillBonus>;
 
 export const SKILL_TREES: Record<HeroClass, SkillNode[]> = {
   warrior: [
@@ -112,7 +112,7 @@ export function aggregateBonuses(heroClass: HeroClass, unlocked: Set<SkillId>): 
     if (!unlocked.has(node.id)) continue;
     const b = node.bonuses;
     for (const k of Object.keys(b) as (keyof SkillBonus)[]) {
-      (agg as any)[k] = ((agg as any)[k] ?? 0) + (b[k] ?? 0);
+      agg[k] += b[k] ?? 0;
     }
   }
   return agg;

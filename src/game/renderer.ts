@@ -75,9 +75,23 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
 
   // ── Doors ──
   for (const door of room.doors) {
-    ctx.fillStyle = door.locked ? '#8b4513' : '#f1c40f';
+    const targetRoom = state.dungeon.rooms[door.targetRoom];
+    const leadsToBoss = targetRoom?.type === 'boss';
+    ctx.fillStyle = leadsToBoss ? (door.locked ? '#5f1212' : '#c92525') : door.locked ? '#8b4513' : '#f1c40f';
     ctx.fillRect(door.x, door.y, door.width, door.height);
-    if (door.locked) {
+    if (leadsToBoss) {
+      ctx.strokeStyle = door.locked ? '#2a0909' : '#ff8a8a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(door.x + 2, door.y + 2, door.width - 4, door.height - 4);
+      ctx.font = 'bold 18px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = door.locked ? '#bfa0a0' : '#fff';
+      ctx.fillText('☠', door.x + 16, door.y + 22);
+      if (door.locked) {
+        ctx.fillStyle = '#241010';
+        ctx.fillRect(door.x + 12, door.y + 23, 8, 5);
+      }
+    } else if (door.locked) {
       ctx.fillStyle = '#555';
       ctx.fillRect(door.x + 12, door.y + 8, 8, 10);
       ctx.beginPath();
@@ -237,6 +251,20 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fillRect(-3, -1, 1, 4);
       ctx.shadowBlur = 0;
+    } else if (l.type === 'powerup') {
+      const colors = { fury: '#ff8844', haste: '#74c0fc', guard: '#b8f7d4' } as const;
+      const color = l.powerUp ? colors[l.powerUp] : '#ffd43b';
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.font = 'bold 8px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText(l.powerUp === 'fury' ? 'F' : l.powerUp === 'haste' ? 'H' : 'G', 0, 3);
+      ctx.shadowBlur = 0;
     } else if (l.type === 'weapon') {
       const rc = RARITY_COLORS[l.rarity];
       ctx.shadowColor = rc;
@@ -313,6 +341,19 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
     }
 
     drawHeroSprite(ctx, p, time);
+    if (state.activePowerUps.length > 0) {
+      const pulse = 0.35 + Math.sin(time * 8) * 0.12;
+      for (const active of state.activePowerUps) {
+        const colors = { fury: '#ff8844', haste: '#74c0fc', guard: '#b8f7d4' } as const;
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = colors[active.type];
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.width / 2 + 7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
     ctx.globalAlpha = 1;
 
 
@@ -320,6 +361,49 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, time
   }
 
   // ── Projectiles ──
+  for (const ally of state.coop.remotePlayers) {
+    if (ally.roomId !== state.dungeon.currentRoomId) continue;
+    const cfg = HERO_CONFIGS[ally.heroClass];
+    const aimAngle = Math.atan2(ally.facing.y, ally.facing.x);
+    ctx.save();
+    ctx.globalAlpha = 0.78;
+    ctx.strokeStyle = cfg.color + '99';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(ally.pos.x, ally.pos.y);
+    ctx.lineTo(ally.aim.x, ally.aim.y);
+    ctx.stroke();
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath();
+    ctx.arc(ally.aim.x, ally.aim.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.translate(ally.pos.x, ally.pos.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(0, 14, 16, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.rotate(aimAngle);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(9, -2, 8, 4);
+    ctx.rotate(-aimAngle);
+    ctx.font = 'bold 10px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(ally.name.slice(0, 10), 0, -20);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-16, -16, 32, 3);
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(-16, -16, 32 * Math.max(0, Math.min(1, ally.hp / ally.maxHp)), 3);
+    ctx.restore();
+  }
+
   for (const proj of state.projectiles) {
     ctx.save();
     ctx.translate(proj.pos.x, proj.pos.y);
@@ -977,14 +1061,16 @@ function renderLevelUpOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
 
 function renderMinimap(ctx: CanvasRenderingContext2D, state: GameState) {
   const mm = { x: ROOM_W - 140, y: 8, cellW: 18, cellH: 14 };
+  const minX = Math.min(...state.dungeon.rooms.map(room => room.gridX));
+  const minY = Math.min(...state.dungeon.rooms.map(room => room.gridY));
   ctx.save();
   ctx.globalAlpha = 0.8;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(mm.x - 4, mm.y - 4, 138, 80);
 
   for (const room of state.dungeon.rooms) {
-    const rx = mm.x + room.gridX * (mm.cellW + 3);
-    const ry = mm.y + room.gridY * (mm.cellH + 3);
+    const rx = mm.x + (room.gridX - minX) * (mm.cellW + 3);
+    const ry = mm.y + (room.gridY - minY) * (mm.cellH + 3);
 
     // Adjacency to a visited room reveals existence (but not contents)
     const adjacentToVisited = !room.visited && state.dungeon.rooms.some(
@@ -1030,8 +1116,8 @@ function renderMinimap(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(rx + mm.cellW / 2, ry + mm.cellH / 2);
-        const tx = mm.x + target.gridX * (mm.cellW + 3) + mm.cellW / 2;
-        const ty = mm.y + target.gridY * (mm.cellH + 3) + mm.cellH / 2;
+        const tx = mm.x + (target.gridX - minX) * (mm.cellW + 3) + mm.cellW / 2;
+        const ty = mm.y + (target.gridY - minY) * (mm.cellH + 3) + mm.cellH / 2;
         ctx.lineTo(tx, ty);
         ctx.stroke();
       }

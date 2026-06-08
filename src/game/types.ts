@@ -21,6 +21,8 @@ export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type TrapType = 'spikes' | 'arrow_launcher' | 'fire_vent';
 export type LevelUpStat = 'hp' | 'attack' | 'speed' | 'mana';
 export type BossKind = 'cave_brute' | 'crypt_lich' | 'fortress_warlord' | 'shadow_wraith';
+export type PowerUpType = 'fury' | 'haste' | 'guard';
+export type ObjectiveKind = 'kills' | 'rooms' | 'chests' | 'bosses';
 
 export interface BossDef {
   kind: BossKind;
@@ -89,6 +91,7 @@ export interface Player extends Entity {
   abilityTimer: number;
   abilityCooldown: number;
   weapon: Weapon;
+  secondaryWeapon: Weapon | null;
   inventory: Weapon[];
   statusEffects: StatusEffect[];
   killCount: number;
@@ -114,6 +117,7 @@ export interface StatusEffect {
 }
 
 export interface Enemy extends Entity {
+  id: string;
   speed: number;
   baseSpeed: number;
   damage: number;
@@ -162,12 +166,98 @@ export interface Particle {
 
 export interface LootDrop {
   pos: Vector2;
-  type: 'gold' | 'health' | 'weapon' | 'mana' | 'health_potion' | 'mana_potion';
+  type: 'gold' | 'health' | 'weapon' | 'mana' | 'health_potion' | 'mana_potion' | 'powerup';
   value: number;
   rarity: WeaponRarity;
   lifetime: number;
   bobOffset: number;
   weapon?: Weapon;
+  powerUp?: PowerUpType;
+}
+
+export interface ActivePowerUp {
+  type: PowerUpType;
+  timer: number;
+  duration: number;
+}
+
+export interface RunObjective {
+  id: string;
+  label: string;
+  kind: ObjectiveKind;
+  target: number;
+  progress: number;
+  rewardGold: number;
+  rewardXp: number;
+  completed: boolean;
+}
+
+export interface RemotePlayer {
+  id: string;
+  name: string;
+  heroClass: HeroClass;
+  pos: Vector2;
+  facing: Vector2;
+  aim: Vector2;
+  hp: number;
+  maxHp: number;
+  level: number;
+  roomId: number;
+  lastSeen: number;
+}
+
+export type CoopRole = 'host' | 'guest';
+
+export interface CoopDamageEnemyEvent {
+  type: 'damageEnemy';
+  enemyId: string;
+  damage: number;
+  crit?: boolean;
+  effect?: Weapon['effect'];
+}
+
+export interface CoopBuyShopItemEvent {
+  type: 'buyShopItem';
+  itemIndex: number;
+}
+
+export type CoopEvent = CoopDamageEnemyEvent | CoopBuyShopItemEvent;
+
+export interface CoopHostPlayerSnapshot {
+  pos: Vector2;
+  facing: Vector2;
+  roomId: number;
+}
+
+export interface CoopWorldSnapshot {
+  version: number;
+  tier: number;
+  currentRoomId: number;
+  hostPlayer: CoopHostPlayerSnapshot;
+  rooms: DungeonRoom[];
+  enemies: Enemy[];
+  projectiles: Projectile[];
+  loot: LootDrop[];
+  traps: Trap[];
+  chests: Chest[];
+  torches: Torch[];
+  shopItems: ShopItem[];
+  roomsCleared: number;
+  wave: number;
+}
+
+export interface CoopState {
+  enabled: boolean;
+  connected: boolean;
+  connecting: boolean;
+  role: CoopRole | null;
+  roomCode: string | null;
+  playerId: string | null;
+  error: string | null;
+  remotePlayers: RemotePlayer[];
+  worldVersion: number;
+  outgoingEvents: CoopEvent[];
+  incomingEvents: CoopEvent[];
 }
 
 export interface DamageNumber {
@@ -272,6 +362,10 @@ export interface GameState {
   showShop: boolean;
   notification: { text: string; timer: number; color: string } | null;
   time: number;
+  combo: { count: number; timer: number; best: number };
+  activePowerUps: ActivePowerUp[];
+  objectives: RunObjective[];
+  coop: CoopState;
   levelUpChoices: LevelUpStat[] | null;
   room: DungeonRoom;
   showSkillTree: boolean;
